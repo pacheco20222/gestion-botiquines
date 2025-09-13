@@ -7,10 +7,15 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y build-essential
 
-COPY requirements.txt .
+# Copy the SSL certificate from the backend directory
+COPY backend/ca-certificate.crt /app/ca-certificate.crt
+
+# Copy requirements and install dependencies
+COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+# Copy the backend application code
+COPY backend/ .
 
 ENV FLASK_APP=app.py 
 EXPOSE 5000
