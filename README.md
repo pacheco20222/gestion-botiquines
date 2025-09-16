@@ -48,6 +48,7 @@ gestion-botiquines/
 │   ├── seed.py             # Database seeding script
 │   └── requirements.txt    # Python dependencies
 │   └── Dockerfile
+│   └── ca-certificate.crt
 ├── docker-compose.yml      # Container orchestration            # Application container
 ├── README.md              # This file
 └── WARP.md               # Development guidance
