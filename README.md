@@ -10,17 +10,17 @@ The system is designed for occupational safety officers, HR representatives, or 
 
 ## 🎯 Key Features
 
-### ✅ Current Features (Sprint 1 - COMPLETED)
+### ✅ Current Features (Sprints 1-2 - COMPLETED)
 - **Flask Backend**: RESTful API with health check and medicine management
 - **MySQL Database**: Robust medication data storage with SQLAlchemy ORM
 - **Docker Support**: Containerized application with docker-compose
-- **CRUD Operations**: Partial CRUD (Create + List implemented; Update/Delete planned for Sprint 2)
-- **User Authentication**: Secure single-user access system
-- **Smart Status Logic**: Automatic calculation of medication status
+- **CRUD Operations**: Full CRUD (Create, Read, Update, Delete implemented)
+- **User Authentication**: Basic authentication routes implemented ✅
+- **Smart Status Logic**: Automatic calculation of medication status ✅
 - **Database Seeding**: Sample data for development and testing
+- **Bootstrap Dashboard**: Responsive web interface with modern UI ✅
 
-### 🚧 Upcoming Features (Sprints 2-4)
-- **Bootstrap Dashboard**: Responsive web interface with modern UI
+### 🚧 Upcoming Features (Sprints 3-4)
 - **Alert System**: Critical, preventive, and informative medication alerts
 - **Visual Indicators**: Color-coded status displays and progress bars
 - **Inventory Management**: Advanced medication tracking and threshold configuration
@@ -39,19 +39,33 @@ The system is designed for occupational safety officers, HR representatives, or 
 ```
 gestion-botiquines/
 ├── backend/
-│   ├── app.py              # Flask application factory
+│   ├── app.py              # Main Flask app
 │   ├── db.py               # Database configuration
 │   ├── models/
-│   │   └── models.py       # Medicine model with business logic
+│   │   ├── __init__.py
+│   │   └── models.py       # SQLAlchemy models (Medicine, Users, etc.)
 │   ├── routes/
-│   │   └── medicines.py    # API endpoints
+│   │   ├── __init__.py
+│   │   ├── medicines.py    # Medicine-related routes
+│   │   ├── user_routes.py  # User authentication routes
+│   │   └── pages.py        # Page rendering routes
 │   ├── seed.py             # Database seeding script
-│   └── requirements.txt    # Python dependencies
-│   └── Dockerfile
-│   └── ca-certificate.crt
-├── docker-compose.yml      # Container orchestration            # Application container
-├── README.md              # This file
-└── WARP.md               # Development guidance
+│   ├── requirements.txt    # Python dependencies
+│   ├── Dockerfile
+│   └── ca-certificate.crt  # SSL certificate (ignored in git)
+├── frontend/
+│   └── templates/
+│       ├── base.html
+│       └── inventory.html
+├── docker-compose.yml      # Service orchestration
+├── .env                    # Environment variables
+├── .gitignore
+├── LICENSE
+├── Plan_Trabajo_Sprints_Botiquines.docx
+├── Requerimientos_Gestion_Botiquines.docx
+├── README.md               # This file
+├── WARP.md                 # Development guidance
+└── venv/                   # Virtual environment (ignored in git)
 ```
 
 ## 🚀 Quick Start
@@ -191,10 +205,9 @@ Once the dashboard is implemented, users will see:
 - API endpoints (/health, /api/medicines/)
 - Database seeding functionality
 
-### Sprint 2: Frontend Dashboard (Week 2)
+### Sprint 2: Frontend Dashboard ✅ COMPLETED
 - Bootstrap integration and responsive design
-- Main dashboard with summary panel
-- Medication inventory display
+- Medication inventory display (inventory.html with Bootstrap table)
 - Basic status visualization
 - User authentication system
 
@@ -278,5 +291,5 @@ For development guidance and technical details, see [`WARP.md`](WARP.md).
 
 ---
 
-**Status**: Sprint 1 Completed ✅ | Sprint 2 Pending 🚧
-**Last Updated**: September 13, 2025
+**Status**: Sprint 1 Completed ✅ | Sprint 2 Completed ✅ | Sprint 3 Pending 🚧  
+**Last Updated**: September 14, 2025

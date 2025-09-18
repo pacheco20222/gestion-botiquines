@@ -42,8 +42,12 @@ def validate_payload(data, *, partial=False):
                 errors.append(f"'{num_field}' must be an integer")
 
     if "expiry_date" in data and data.get("expiry_date"):
-        if parse_date(data["expiry_date"]) is None:
+        exp = parse_date(data["expiry_date"])
+        if exp is None:
             errors.append("'expiry_date' must be YYYY-MM-DD")
+        else:
+            if exp <= date.today():
+                errors.append("'expiry_date' must be a future date")
 
     return (len(errors) == 0, errors)
 

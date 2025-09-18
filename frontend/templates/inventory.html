@@ -11,9 +11,14 @@
             <th>ID</th>
             <th>Trade Name</th>
             <th>Generic Name</th>
+            <th>Brand</th>
+            <th>Strength</th>
+            <th>Expiry Date</th>
             <th>Quantity</th>
             <th>Reorder Level</th>
-            <th>Expiry Date</th>
+            <th>Last Scan</th>
+            <th>Created At</th>
+            <th>Updated At</th>
             <th>Status</th>
         </tr>
     </thead>
@@ -23,9 +28,14 @@
             <td>{{ med.id }}</td>
             <td>{{ med.trade_name }}</td>
             <td>{{ med.generic_name }}</td>
+            <td>{{ med.brand }}</td>
+            <td>{{ med.strength }}</td>
+            <td>{{ med.expiry_date }}</td>
             <td>{{ med.quantity }}</td>
             <td>{{ med.reorder_level }}</td>
-            <td>{{ med.expiry_date }}</td>
+            <td>{{ med.last_scan_at }}</td>
+            <td>{{ med.created_at }}</td>
+            <td>{{ med.updated_at }}</td>
             <td>
                 {% if med.status == "Expired" %}
                     <span class="badge bg-danger">Expired</span>
