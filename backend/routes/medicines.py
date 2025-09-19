@@ -26,11 +26,16 @@ def parse_date(value):
 
 def validate_payload(data, *, partial=False):
     errors = []
-    required = ["trade_name", "generic_name", "strength", "expiry_date", "quantity"]
+    required = ["trade_name", "generic_name", "strength", "expiry_date", "quantity", "reorder_level"]
     if not partial:
         for f in required:
             if f not in data or data.get(f) in (None, ""):
-                errors.append(f"'{f}' is required")
+                if f == "reorder_level":
+                    errors.append("'reorder_level' is required (minimum stock threshold)")
+                elif f == "quantity":
+                    errors.append("'quantity' is required (stock count)")
+                else:
+                    errors.append(f"'{f}' is required")
 
     for num_field in ["quantity", "reorder_level"]:
         if num_field in data and data[num_field] is not None:
@@ -69,10 +74,53 @@ def to_dict(m: Medicine):
 
 # -------- Routes --------
 
+
 @bp.get("/")
 def list_medicines():
     meds = Medicine.query.order_by(Medicine.id.asc()).all()
     return jsonify([to_dict(m) for m in meds]), 200
+
+
+# -------- New: Filter by status --------
+@bp.get("/filter")
+def filter_medicines():
+    """
+    Returns medicines filtered by status query parameter.
+    Example: /api/medicines/filter?status=EXPIRED
+    Valid statuses: OUT_OF_STOCK, EXPIRED, EXPIRES_SOON, EXPIRES_30, LOW_STOCK, OK
+    """
+    status = request.args.get("status")
+    meds = Medicine.query.order_by(Medicine.id.asc()).all()
+    results = [to_dict(m) for m in meds if not status or m.status() == status]
+    return jsonify(results), 200
+
+
+@bp.get("/alerts")
+def get_alerts():
+    """
+    Returns medicines grouped by alert category.
+    - Critical: OUT_OF_STOCK, EXPIRED, EXPIRES_SOON
+    - Preventive: EXPIRES_30, LOW_STOCK
+    - Normal: OK
+    """
+    meds = Medicine.query.order_by(Medicine.id.asc()).all()
+    alerts = {
+        "critical": [],
+        "preventive": [],
+        "normal": []
+    }
+
+    for m in meds:
+        status = m.status()
+        med_dict = to_dict(m)
+        if status in ["OUT_OF_STOCK", "EXPIRED", "EXPIRES_SOON"]:
+            alerts["critical"].append(med_dict)
+        elif status in ["EXPIRES_30", "LOW_STOCK"]:
+            alerts["preventive"].append(med_dict)
+        else:
+            alerts["normal"].append(med_dict)
+
+    return jsonify(alerts), 200
 
 @bp.post("/")
 def create_medicine():
@@ -88,7 +136,7 @@ def create_medicine():
         strength=data.get("strength"),
         expiry_date=parse_date(data.get("expiry_date")),
         quantity=int(data.get("quantity")),
-        reorder_level=int(data.get("reorder_level", 0)),
+        reorder_level=int(data.get("reorder_level")),
         last_scan_at=datetime.utcnow(),
     )
     db.session.add(med)

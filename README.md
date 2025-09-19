@@ -10,7 +10,7 @@ The system is designed for occupational safety officers, HR representatives, or 
 
 ## 🎯 Key Features
 
-### ✅ Current Features (Sprints 1-2 - COMPLETED)
+### ✅ Current Features (Sprints 1-4 - COMPLETED)
 - **Flask Backend**: RESTful API with health check and medicine management
 - **MySQL Database**: Robust medication data storage with SQLAlchemy ORM
 - **Docker Support**: Containerized application with docker-compose
@@ -19,12 +19,19 @@ The system is designed for occupational safety officers, HR representatives, or 
 - **Smart Status Logic**: Automatic calculation of medication status ✅
 - **Database Seeding**: Sample data for development and testing
 - **Bootstrap Dashboard**: Responsive web interface with modern UI ✅
+- **Alert System**: Critical, preventive, and informative medication alerts ✅
+- **Visual Indicators**: Color-coded status displays and progress bars ✅
+- **Inventory Management**: Advanced medication tracking and threshold configuration ✅
+- **Login Page**: User login form for authentication ✅
+- **Demo User Authentication**: Pre-configured demo user for easy access ✅
 
-### 🚧 Upcoming Features (Sprints 3-4)
-- **Alert System**: Critical, preventive, and informative medication alerts
-- **Visual Indicators**: Color-coded status displays and progress bars
-- **Inventory Management**: Advanced medication tracking and threshold configuration
-- **Production Deployment**: DigitalOcean or setup
+### 🚫 Future Features (Post-MVP)
+- Hardware sensor integration
+- Multiple users and role management
+- Advanced reporting and analytics
+- Detailed historical tracking
+- Email/SMS notifications
+- Mobile applications
 
 ## 🏗️ Architecture
 
@@ -101,8 +108,12 @@ gestion-botiquines/
    ```
 
 4. **Access the application**
-   - Health Check: http://localhost:5000/health
-   - API Endpoint: http://localhost:5000/api/medicines/
+   - Login Page: http://localhost:5001/ → login with demo credentials (`demo` / `demo123`)
+   - Dashboard: http://localhost:5001/dashboard after login
+
+### Demo User
+- Username: demo
+- Password: demo123
 
 ## 💻 Development
 
@@ -136,7 +147,7 @@ echo "DATABASE_URL=mysql+pymysql://botuser:botpass@localhost:3306/botiquines" > 
 
 # Run Flask development server
 export FLASK_APP=app.py
-flask run --host=0.0.0.0 --port=5000
+flask run --host=0.0.0.0 --port=5001
 ```
 
 ## 📊 Data Model
@@ -159,7 +170,7 @@ Each medication in the system contains:
 - Last update timestamp
 - Calculated status (OUT_OF_STOCK, EXPIRED, EXPIRES_SOON, LOW_STOCK, OK)
 
-## 🚨 Alert System (Coming in Sprint 3)
+## 🚨 Alert System (Implemented in Sprint 3)
 
 ### Alert Categories
 - 🔴 **Critical**: Out of stock or expired medications
@@ -211,17 +222,19 @@ Once the dashboard is implemented, users will see:
 - Basic status visualization
 - User authentication system
 
-### Sprint 3: Alert System & Advanced Features (Week 3)
+### Sprint 3: Alert System & Advanced Features ✅ COMPLETED
 - Alert generation logic
 - Visual alert indicators
 - Dashboard filtering capabilities
 - Configuration panel for thresholds
 - Enhanced medication management
+- Login page implemented
+- Demo user authentication available
 
-### Sprint 4: Testing, Polish & Deployment (Week 4 + Buffer)
+### Sprint 4: Testing, Polish & Deployment 🚧 IN PROGRESS
 - Comprehensive testing and bug fixes
-- UI/UX refinements
-- Production deployment
+- UI/UX refinements and polish
+- Demo dataset preparation
 - Documentation completion
 - User acceptance testing
 
@@ -231,9 +244,10 @@ Once the dashboard is implemented, users will see:
 - Functional web dashboard with critical visualizations
 - Automatic alert system for expiration and stock
 - Basic medication inventory management
-- Single-user authentication
+- Single-user authentication with login page
 - Responsive web interface
 - Docker containerization
+- Demo user for easy access
 
 ### 🚫 Not Included (Future Versions)
 - Hardware sensor integration
@@ -247,11 +261,14 @@ Once the dashboard is implemented, users will see:
 
 ### Current Endpoints
 ```
-GET  /health           # Health check
-GET  /api/medicines/   # List all medicines
-POST /api/medicines/   # Create new medicine
-POST /api/users/register # Register User
-POST /api/users/login # Login to account
+GET  /health                 # Health check
+GET  /api/medicines/         # List all medicines
+POST /api/medicines/         # Create new medicine
+POST /api/users/register     # Register User
+POST /api/users/login        # Login to account (API)
+GET  /login                  # Login page (form)
+GET  /api/medicines/alerts   # Retrieve alerts for medicines
+POST /api/medicines/filter   # Filter medicines based on criteria
 ```
 
 ### Example API Response
@@ -291,5 +308,5 @@ For development guidance and technical details, see [`WARP.md`](WARP.md).
 
 ---
 
-**Status**: Sprint 1 Completed ✅ | Sprint 2 Completed ✅ | Sprint 3 Pending 🚧  
+**Status**: Sprint 1 Completed ✅ | Sprint 2 Completed ✅ | Sprint 3 Completed ✅ | Sprint 4 In Progress 🚧  
 **Last Updated**: September 14, 2025

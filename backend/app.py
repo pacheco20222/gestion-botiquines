@@ -19,7 +19,7 @@ from routes.pages import bp as pages_bp
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEMPLATES_DIR = os.path.join(BASE_DIR, "..", "frontend", "templates")
-
+# te quiero mucho pachecon - cambranis
 
 def create_app():
     """
@@ -29,10 +29,11 @@ def create_app():
 
     # 1) Database setup
     init_db(app)
+    app.secret_key = os.getenv("SECRET_KEY", "fallback-secret")
 
     # 2) Register blueprints
     app.register_blueprint(medicines_bp, url_prefix="/api/medicines")
-    app.register_blueprint(users_bp, url_prefix="/api/users")
+    app.register_blueprint(users_bp)
     app.register_blueprint(pages_bp)
 
     # 3) Health check route (simple MVP check)

@@ -1,36 +1,81 @@
-from datetime import date, datetime, timedelta
-from app import app, db
+from datetime import datetime, timedelta
+from db import db
 from models.models import Medicine, User
-
+from app import app
+from werkzeug.security import generate_password_hash
 
 with app.app_context():
+    db.drop_all()
     db.create_all()
-    
-    # Seed medicines
-    if Medicine.query.count() == 0:
-        samples = [
-            Medicine(trade_name="Paracetamol 500mg", generic_name="Paracetamol", brand="Genfar",
-                    strength="500mg", expiry_date=date.today() + timedelta(days=90),
-                    quantity=15, reorder_level=5, last_scan_at=datetime.utcnow()),
-            Medicine(trade_name="Ibuprofeno 200mg", generic_name="Ibuprofeno", brand="MK",
-                     strength="200mg", expiry_date=date.today() + timedelta(days=5),
-                     quantity=2, reorder_level=4, last_scan_at=datetime.utcnow()),
-            Medicine(trade_name="Gasas estériles", generic_name="Material de curación", brand="3M",
-                     strength="10x10cm", expiry_date=date.today() + timedelta(days=200),
-                     quantity=0, reorder_level=2, last_scan_at=datetime.utcnow()),
-        ]
-        db.session.add_all(samples)
-        db.session.commit()
-        print("✅ Seed cargado: 3 medicamentos de ejemplo")
-    else:
-        print("ℹ️ Ya existen medicamentos, seed omitido")
 
-    # Seed default user
-    if User.query.count() == 0:
-        user = User(username="admin")
-        user.set_password("admin123")  # hashed automatically
-        db.session.add(user)
-        db.session.commit()
-        print("✅ Usuario por defecto creado: admin / admin123")
-    else:
-        print("ℹ️ Ya existe al menos un usuario, seed de usuarios omitido")
+    # Medicines covering all states
+    medicines = [
+        # Expired
+        Medicine(
+            trade_name="ExpiredMed",
+            generic_name="GenExpired",
+            brand="Lab A",
+            strength="500mg",
+            expiry_date=datetime.utcnow() - timedelta(days=10),
+            quantity=10,
+            reorder_level=2,
+            last_scan_at=datetime.utcnow()
+        ),
+        # Expiring Soon (≤7 days)
+        Medicine(
+            trade_name="SoonMed",
+            generic_name="GenSoon",
+            brand="Lab B",
+            strength="250mg",
+            expiry_date=datetime.utcnow() + timedelta(days=5),
+            quantity=5,
+            reorder_level=2,
+            last_scan_at=datetime.utcnow()
+        ),
+        # Low stock (quantity ≤ reorder_level, > 0)
+        Medicine(
+            trade_name="LowStockMed",
+            generic_name="GenLow",
+            brand="Lab C",
+            strength="100mg",
+            expiry_date=datetime.utcnow() + timedelta(days=200),
+            quantity=1,
+            reorder_level=3,
+            last_scan_at=datetime.utcnow()
+        ),
+        # Out of stock (quantity = 0)
+        Medicine(
+            trade_name="OutMed",
+            generic_name="GenOut",
+            brand="Lab D",
+            strength="50mg",
+            expiry_date=datetime.utcnow() + timedelta(days=365),
+            quantity=0,
+            reorder_level=2,
+            last_scan_at=datetime.utcnow()
+        ),
+        # Normal / OK
+        Medicine(
+            trade_name="OkMed",
+            generic_name="GenOk",
+            brand="Lab E",
+            strength="20mg",
+            expiry_date=datetime.utcnow() + timedelta(days=400),
+            quantity=50,
+            reorder_level=5,
+            last_scan_at=datetime.utcnow()
+        ),
+    ]
+
+    db.session.add_all(medicines)
+
+    # Demo user
+    demo_user = User(
+        username="demo",
+        password_hash=generate_password_hash("demo123")
+    )
+    db.session.add(demo_user)
+
+    db.session.commit()
+
+    print("Database seeded with demo medicines and demo user.")

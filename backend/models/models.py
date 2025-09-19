@@ -56,11 +56,21 @@ class Medicine(db.Model):
 
     # --- Helper methods ---
 
+    def days_to_expiry(self):
+        """
+        Returns the number of days until the medicine expires.
+        - Negative value if already expired.
+        - None if expiry_date is not set.
+        """
+        if not self.expiry_date:
+            return None
+        return (self.expiry_date - date.today()).days
+
     def status(self) -> str:
         """
-        Returns a simple status string for the medicine.
+        Returns a detailed status string for the medicine.
         - "OUT_OF_STOCK" if quantity = 0
-        - "EXPIRED" if expiry_date < today
+        - "EXPIRED" if already expired
         - "EXPIRES_SOON" if expiry_date ≤ 7 days
         - "EXPIRES_30" if expiry_date ≤ 30 days
         - "LOW_STOCK" if quantity ≤ reorder_level
@@ -69,9 +79,8 @@ class Medicine(db.Model):
         if self.quantity <= 0:
             return "OUT_OF_STOCK"
 
-        if self.expiry_date:
-            today = date.today()
-            days = (self.expiry_date - today).days
+        days = self.days_to_expiry()
+        if days is not None:
             if days < 0:
                 return "EXPIRED"
             if days <= 7:
@@ -99,6 +108,7 @@ class Medicine(db.Model):
             "reorder_level": self.reorder_level,
             "last_scan_at": self.last_scan_at.isoformat() if self.last_scan_at else None,
             "status": self.status(),
+            "days_to_expiry": self.days_to_expiry(),
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
         }
