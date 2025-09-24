@@ -56,7 +56,7 @@ class User(db.Model):
     password_hash = db.Column(db.String(255), nullable=False)
     
     # User type: 'super_admin' or 'company_admin'
-    user_tyoe = db.Column(db.String(20), default="company_admin", nullable=False)
+    user_type = db.Column(db.String(20), default="company_admin", nullable=False)
     
     # Foreign key to company (null for super_admin)
     company_id = db.Column(db.Integer, db.ForeignKey("companies.id"), nullable=True)
