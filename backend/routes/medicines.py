@@ -1,15 +1,12 @@
 """
 Routes for the Medicine resource.
-
-Sprint 2 goals:
-- Full CRUD (list, create, get, update, delete)
-- Validations for required fields and dates
+Updated to support botiquines and weight-based calculations.
 """
 
 from flask import Blueprint, request, jsonify
 from datetime import datetime, date
 from db import db
-from models.models import Medicine
+from models.models import Medicine, Botiquin
 
 bp = Blueprint("medicines", __name__)
 
@@ -26,18 +23,30 @@ def parse_date(value):
 
 def validate_payload(data, *, partial=False):
     errors = []
-    required = ["trade_name", "generic_name", "strength", "expiry_date", "quantity", "reorder_level"]
+    
+    # Updated required fields to include botiquin_id
+    required = ["botiquin_id", "trade_name", "generic_name", "strength", "expiry_date", "quantity", "reorder_level"]
+    
     if not partial:
         for f in required:
             if f not in data or data.get(f) in (None, ""):
-                if f == "reorder_level":
+                if f == "botiquin_id":
+                    errors.append("'botiquin_id' is required (must assign to a botiquin)")
+                elif f == "reorder_level":
                     errors.append("'reorder_level' is required (minimum stock threshold)")
                 elif f == "quantity":
                     errors.append("'quantity' is required (stock count)")
                 else:
                     errors.append(f"'{f}' is required")
-
-    for num_field in ["quantity", "reorder_level"]:
+    
+    # Validate botiquin exists
+    if "botiquin_id" in data and data.get("botiquin_id"):
+        bot = Botiquin.query.get(data["botiquin_id"])
+        if not bot:
+            errors.append(f"Botiquin with id {data['botiquin_id']} does not exist")
+    
+    # Validate numeric fields
+    for num_field in ["quantity", "reorder_level", "compartment_number", "max_capacity"]:
         if num_field in data and data[num_field] is not None:
             try:
                 v = int(data[num_field])
@@ -45,53 +54,76 @@ def validate_payload(data, *, partial=False):
                     errors.append(f"'{num_field}' must be >= 0")
             except (TypeError, ValueError):
                 errors.append(f"'{num_field}' must be an integer")
-
+    
+    # Validate float fields
+    for float_field in ["unit_weight", "current_weight"]:
+        if float_field in data and data[float_field] is not None:
+            try:
+                v = float(data[float_field])
+                if v < 0:
+                    errors.append(f"'{float_field}' must be >= 0")
+            except (TypeError, ValueError):
+                errors.append(f"'{float_field}' must be a number")
+    
+    # Validate expiry date
     if "expiry_date" in data and data.get("expiry_date"):
         exp = parse_date(data["expiry_date"])
         if exp is None:
             errors.append("'expiry_date' must be YYYY-MM-DD")
-        else:
-            if exp <= date.today():
-                errors.append("'expiry_date' must be a future date")
+        # Note: We allow past dates for already expired medicines in inventory
 
     return (len(errors) == 0, errors)
 
-def to_dict(m: Medicine):
-    return {
-        "id": m.id,
-        "trade_name": m.trade_name,
-        "generic_name": m.generic_name,
-        "brand": m.brand,
-        "strength": m.strength,
-        "expiry_date": m.expiry_date.isoformat() if m.expiry_date else None,
-        "quantity": m.quantity,
-        "reorder_level": m.reorder_level,
-        "last_scan_at": m.last_scan_at.isoformat() if m.last_scan_at else None,
-        "created_at": m.created_at.isoformat() if m.created_at else None,
-        "updated_at": m.updated_at.isoformat() if m.updated_at else None,
-        "status": m.status(),
-    }
-
 # -------- Routes --------
-
 
 @bp.get("/")
 def list_medicines():
-    meds = Medicine.query.order_by(Medicine.id.asc()).all()
-    return jsonify([to_dict(m) for m in meds]), 200
+    """List all medicines, optionally filtered by botiquin"""
+    botiquin_id = request.args.get("botiquin_id")
+    
+    query = Medicine.query
+    if botiquin_id:
+        query = query.filter_by(botiquin_id=botiquin_id)
+    
+    meds = query.order_by(Medicine.id.asc()).all()
+    return jsonify([m.to_dict() for m in meds]), 200
 
 
-# -------- New: Filter by status --------
+@bp.get("/botiquin/<int:botiquin_id>")
+def list_medicines_by_botiquin(botiquin_id):
+    """List all medicines in a specific botiquin"""
+    botiquin = Botiquin.query.get(botiquin_id)
+    if not botiquin:
+        return jsonify({"error": "Botiquin not found"}), 404
+    
+    meds = Medicine.query.filter_by(botiquin_id=botiquin_id).order_by(Medicine.compartment_number.asc()).all()
+    return jsonify({
+        "botiquin": botiquin.to_dict(),
+        "medicines": [m.to_dict() for m in meds]
+    }), 200
+
+
 @bp.get("/filter")
 def filter_medicines():
     """
-    Returns medicines filtered by status query parameter.
-    Example: /api/medicines/filter?status=EXPIRED
+    Returns medicines filtered by status and/or botiquin.
+    Example: /api/medicines/filter?status=EXPIRED&botiquin_id=1
     Valid statuses: OUT_OF_STOCK, EXPIRED, EXPIRES_SOON, EXPIRES_30, LOW_STOCK, OK
     """
     status = request.args.get("status")
-    meds = Medicine.query.order_by(Medicine.id.asc()).all()
-    results = [to_dict(m) for m in meds if not status or m.status() == status]
+    botiquin_id = request.args.get("botiquin_id")
+    
+    query = Medicine.query
+    if botiquin_id:
+        query = query.filter_by(botiquin_id=botiquin_id)
+    
+    meds = query.order_by(Medicine.id.asc()).all()
+    
+    if status:
+        results = [m.to_dict() for m in meds if m.status() == status]
+    else:
+        results = [m.to_dict() for m in meds]
+    
     return jsonify(results), 200
 
 
@@ -99,11 +131,16 @@ def filter_medicines():
 def get_alerts():
     """
     Returns medicines grouped by alert category.
-    - Critical: OUT_OF_STOCK, EXPIRED, EXPIRES_SOON
-    - Preventive: EXPIRES_30, LOW_STOCK
-    - Normal: OK
+    Can be filtered by botiquin_id.
     """
-    meds = Medicine.query.order_by(Medicine.id.asc()).all()
+    botiquin_id = request.args.get("botiquin_id")
+    
+    query = Medicine.query
+    if botiquin_id:
+        query = query.filter_by(botiquin_id=botiquin_id)
+    
+    meds = query.order_by(Medicine.id.asc()).all()
+    
     alerts = {
         "critical": [],
         "preventive": [],
@@ -112,7 +149,7 @@ def get_alerts():
 
     for m in meds:
         status = m.status()
-        med_dict = to_dict(m)
+        med_dict = m.to_dict()
         if status in ["OUT_OF_STOCK", "EXPIRED", "EXPIRES_SOON"]:
             alerts["critical"].append(med_dict)
         elif status in ["EXPIRES_30", "LOW_STOCK"]:
@@ -122,33 +159,48 @@ def get_alerts():
 
     return jsonify(alerts), 200
 
+
 @bp.post("/")
 def create_medicine():
+    """Create a new medicine in a botiquin"""
     data = request.get_json() or {}
     ok, errors = validate_payload(data, partial=False)
     if not ok:
         return jsonify({"errors": errors}), 400
 
     med = Medicine(
+        botiquin_id=int(data.get("botiquin_id")),
+        compartment_number=int(data.get("compartment_number")) if data.get("compartment_number") else None,
         trade_name=data.get("trade_name"),
         generic_name=data.get("generic_name"),
         brand=data.get("brand"),
         strength=data.get("strength"),
-        expiry_date=parse_date(data.get("expiry_date")),
+        unit_weight=float(data.get("unit_weight")) if data.get("unit_weight") else None,
+        current_weight=float(data.get("current_weight")) if data.get("current_weight") else None,
         quantity=int(data.get("quantity")),
         reorder_level=int(data.get("reorder_level")),
+        max_capacity=int(data.get("max_capacity")) if data.get("max_capacity") else None,
+        expiry_date=parse_date(data.get("expiry_date")),
+        batch_number=data.get("batch_number"),
         last_scan_at=datetime.utcnow(),
     )
+    
+    # Calculate quantity from weight if both weights are provided
+    if med.unit_weight and med.current_weight:
+        med.calculate_quantity_from_weight()
+    
     db.session.add(med)
     db.session.commit()
-    return jsonify(to_dict(med)), 201
+    return jsonify(med.to_dict()), 201
+
 
 @bp.get("/<int:med_id>")
 def get_medicine(med_id):
     med = Medicine.query.get(med_id)
     if not med:
         return jsonify({"error": "Medicine not found"}), 404
-    return jsonify(to_dict(med)), 200
+    return jsonify(med.to_dict()), 200
+
 
 @bp.put("/<int:med_id>")
 def update_medicine(med_id):
@@ -161,13 +213,21 @@ def update_medicine(med_id):
     if not ok:
         return jsonify({"errors": errors}), 400
 
-    fields = ["trade_name", "generic_name", "brand", "strength", "expiry_date", "quantity", "reorder_level", "last_scan_at"]
+    # List of fields that can be updated
+    fields = [
+        "botiquin_id", "compartment_number", "trade_name", "generic_name", 
+        "brand", "strength", "unit_weight", "current_weight", "quantity", 
+        "reorder_level", "max_capacity", "expiry_date", "batch_number", "last_scan_at"
+    ]
+    
     for f in fields:
         if f in data:
             if f == "expiry_date":
                 setattr(med, f, parse_date(data[f]))
-            elif f in ["quantity", "reorder_level"]:
+            elif f in ["quantity", "reorder_level", "compartment_number", "max_capacity", "botiquin_id"]:
                 setattr(med, f, int(data[f]) if data[f] is not None else None)
+            elif f in ["unit_weight", "current_weight"]:
+                setattr(med, f, float(data[f]) if data[f] is not None else None)
             elif f == "last_scan_at":
                 val = data[f]
                 if val is True:
@@ -179,9 +239,15 @@ def update_medicine(med_id):
                         pass
             else:
                 setattr(med, f, data[f])
+    
+    # Recalculate quantity if weights changed
+    if "unit_weight" in data or "current_weight" in data:
+        if med.unit_weight and med.current_weight:
+            med.calculate_quantity_from_weight()
 
     db.session.commit()
-    return jsonify(to_dict(med)), 200
+    return jsonify(med.to_dict()), 200
+
 
 @bp.delete("/<int:med_id>")
 def delete_medicine(med_id):
@@ -192,3 +258,40 @@ def delete_medicine(med_id):
     db.session.delete(med)
     db.session.commit()
     return jsonify({"message": "Medicine deleted"}), 200
+
+
+@bp.post("/<int:med_id>/update_weight")
+def update_medicine_weight(med_id):
+    """
+    Special endpoint to update medicine weight from hardware.
+    Automatically calculates new quantity.
+    """
+    med = Medicine.query.get(med_id)
+    if not med:
+        return jsonify({"error": "Medicine not found"}), 404
+    
+    data = request.get_json() or {}
+    weight = data.get("weight")
+    
+    if weight is None:
+        return jsonify({"error": "Weight is required"}), 400
+    
+    try:
+        weight = float(weight)
+        if weight < 0:
+            return jsonify({"error": "Weight must be >= 0"}), 400
+    except (TypeError, ValueError):
+        return jsonify({"error": "Weight must be a number"}), 400
+    
+    # Update weight and calculate new quantity
+    old_quantity = med.quantity
+    new_quantity = med.update_from_sensor(weight)
+    
+    db.session.commit()
+    
+    return jsonify({
+        "medicine": med.to_dict(),
+        "old_quantity": old_quantity,
+        "new_quantity": new_quantity,
+        "quantity_change": new_quantity - old_quantity
+    }), 200
