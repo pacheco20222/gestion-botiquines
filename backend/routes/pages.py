@@ -3,18 +3,33 @@ Frontend page routes with botiquin support.
 Handles dashboard views for multiple first aid kits.
 """
 
-from flask import Blueprint, render_template, request, redirect, url_for, session
+from flask import Blueprint, render_template, request, redirect, url_for, session, jsonify
 from models.models import Medicine, Botiquin, Company, User
 from datetime import datetime
 from db import db
 
 bp = Blueprint("pages", __name__)
 
+"""
+FIXES for Authentication Issues:
+
+1. Fixed pages.py index() route - proper security check
+2. Fixed user_routes.py login() route - handle both form and JSON data
+"""
+
 @bp.route("/")
 def index():
-    """Redirect to login or dashboard based on session"""
+    """Redirect to login or dashboard based on session - FIXED SECURITY"""
     if "user_id" in session:
-        return redirect(url_for("pages.dashboard"))
+        # Verify the user still exists and is active
+        user = User.query.get(session["user_id"])
+        if user and user.active:
+            return redirect(url_for("pages.dashboard"))
+        else:
+            # Clear invalid session
+            session.clear()
+    
+    # Always redirect to login if no valid session
     return redirect(url_for("users.login"))
 
 
@@ -117,7 +132,7 @@ def botiquin_detail(botiquin_id):
     # Get filter parameters
     status_filter = request.args.get("status")
     
-    # Build compartment grid
+    # Build compartment grid - FIXED to match template expectations
     grid = []
     compartment_map = {}
     
@@ -126,7 +141,7 @@ def botiquin_detail(botiquin_id):
         if medicine.compartment_number:
             compartment_map[medicine.compartment_number] = medicine
     
-    # Build visual grid
+    # Build visual grid - Fixed field names to match template
     compartment_num = 1
     for row in range(botiquin.compartment_rows):
         grid_row = []
@@ -134,7 +149,7 @@ def botiquin_detail(botiquin_id):
             if compartment_num <= botiquin.total_compartments:
                 medicine = compartment_map.get(compartment_num)
                 grid_row.append({
-                    "number": compartment_num,
+                    "compartment": compartment_num,  # Changed from "number" to "compartment"
                     "medicine": medicine.to_dict() if medicine else None,
                     "occupied": medicine is not None
                 })
@@ -175,8 +190,66 @@ def botiquin_detail(botiquin_id):
 
 @bp.get("/inventory")
 def inventory():
-    """Legacy route - redirects to dashboard"""
-    return redirect(url_for("pages.dashboard"))
+    """
+    NEW: Proper inventory view showing all medicines across botiquines
+    Compatible with updated inventory.html template
+    """
+    if "user_id" not in session:
+        return redirect(url_for("users.login"))
+    
+    user = User.query.get(session["user_id"])
+    if not user:
+        return redirect(url_for("users.login"))
+    
+    # Get filter parameters
+    status_filter = request.args.get("status")
+    
+    # Get medicines based on user access level
+    if user.is_super_admin():
+        # Super admin sees all medicines from all companies
+        medicines_query = Medicine.query.join(Botiquin).join(Company)
+        show_company = True
+    else:
+        # Company admin sees only their company's medicines
+        if not user.company_id:
+            return "User not assigned to any company", 403
+        medicines_query = Medicine.query.join(Botiquin).filter(
+            Botiquin.company_id == user.company_id
+        )
+        show_company = False
+    
+    # Apply status filter if provided
+    all_medicines = medicines_query.all()
+    if status_filter:
+        medicines = [m for m in all_medicines if m.status() == status_filter]
+    else:
+        medicines = all_medicines
+    
+    # Convert to dict format for template
+    medicines_dict = []
+    for med in medicines:
+        med_data = med.to_dict()
+        # Add company info if super admin
+        if show_company:
+            med_data["company_name"] = med.botiquin.company.name
+        medicines_dict.append(med_data)
+    
+    # Build summary statistics
+    summary = {
+        "total": len(all_medicines),
+        "critical": sum(1 for m in all_medicines if m.status() in ["EXPIRED", "OUT_OF_STOCK"]),
+        "low_stock": sum(1 for m in all_medicines if m.status() == "LOW_STOCK"),
+        "last_update": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    }
+    
+    return render_template(
+        "inventory.html",
+        user=user,
+        medicines=medicines_dict,
+        summary=summary,
+        current_status=status_filter,
+        show_company=show_company
+    )
 
 
 @bp.get("/companies")
@@ -204,8 +277,11 @@ def companies():
             "created": company.created_at.strftime("%Y-%m-%d")
         })
     
+    # NOTE: companies.html template not created yet - will show basic info for now
     return render_template(
-        "companies.html",
+        "dashboard.html",  # Use dashboard as fallback until companies.html is created
         user=user,
-        companies=companies_data
+        summary={"total_companies": len(companies)},
+        companies=companies_data,
+        show_company=True
     )

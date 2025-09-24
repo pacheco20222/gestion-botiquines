@@ -14,24 +14,32 @@ bp = Blueprint("users", __name__)
 
 @bp.route("/login", methods=["GET", "POST"])
 def login():
-    """Handle user login"""
+    """Handle user login - FIXED to handle both form and JSON data"""
     if request.method == "GET":
         # Check if already logged in
         if "user_id" in session:
-            return redirect(url_for("pages.dashboard"))
+            user = User.query.get(session["user_id"])
+            if user and user.active:
+                return redirect(url_for("pages.dashboard"))
         return render_template("login.html")
 
     if request.method == "POST":
-        data = request.form if request.form else request.json
+        # Handle both form data and JSON data
+        if request.content_type and 'application/json' in request.content_type:
+            data = request.json or {}
+        else:
+            # Handle form data (from HTML form)
+            data = request.form.to_dict()
 
         username = data.get("username", "").strip()
         password = data.get("password", "").strip()
 
         if not username or not password:
+            error_msg = "Username and password are required"
             if request.json:
-                return jsonify({"error": "Username and password are required"}), 400
+                return jsonify({"error": error_msg}), 400
             else:
-                return render_template("login.html", error="Username and password are required")
+                return render_template("login.html", error=error_msg)
 
         # Query user
         user = User.query.filter_by(username=username, active=True).first()
@@ -61,10 +69,11 @@ def login():
             else:
                 return redirect(url_for("pages.dashboard"))
         else:
+            error_msg = "Invalid credentials"
             if request.json:
-                return jsonify({"error": "Invalid credentials"}), 401
+                return jsonify({"error": error_msg}), 401
             else:
-                return render_template("login.html", error="Invalid credentials")
+                return render_template("login.html", error=error_msg)
 
 
 @bp.route("/logout")
