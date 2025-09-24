@@ -132,38 +132,21 @@ def botiquin_detail(botiquin_id):
     # Get filter parameters
     status_filter = request.args.get("status")
     
-    # Build compartment grid - FIXED to match template expectations
-    grid = []
-    compartment_map = {}
-    
-    # Map medicines to compartments
-    for medicine in botiquin.medicines:
-        if medicine.compartment_number:
-            compartment_map[medicine.compartment_number] = medicine
-    
-    # Build visual grid - Fixed field names to match template
-    compartment_num = 1
-    for row in range(botiquin.compartment_rows):
-        grid_row = []
-        for col in range(botiquin.compartment_cols):
-            if compartment_num <= botiquin.total_compartments:
-                medicine = compartment_map.get(compartment_num)
-                grid_row.append({
-                    "compartment": compartment_num,  # Changed from "number" to "compartment"
-                    "medicine": medicine.to_dict() if medicine else None,
-                    "occupied": medicine is not None
-                })
-            else:
-                grid_row.append(None)
-            compartment_num += 1
-        grid.append(grid_row)
+    # Build comp_map: list of dicts with keys: number, medicine_name, status, quantity
+    comp_status = botiquin.get_compartment_status()
+    comp_map = {}
+    for number, data in comp_status.items():
+        comp_map[number] = {
+            "number": number,
+            "medicine_name": data.get("medicine") if data else None,
+            "status": data.get("status") if data else None,
+            "quantity": data.get("quantity") if data else None,
+        }
     
     # Get medicines list
     medicines = botiquin.medicines
     if status_filter:
         medicines = [m for m in medicines if m.status() == status_filter]
-    
-    medicines_dict = [m.to_dict() for m in medicines]
     
     # Build summary
     all_medicines = botiquin.medicines
@@ -181,10 +164,10 @@ def botiquin_detail(botiquin_id):
         "botiquin_detail.html",
         user=user,
         botiquin=botiquin,
-        grid=grid,
-        medicines=medicines_dict,
         summary=summary,
-        current_status=status_filter
+        current_status=status_filter,
+        comp_map=comp_map,
+        grid_cols=botiquin.compartment_cols
     )
 
 
@@ -234,6 +217,17 @@ def inventory():
             med_data["company_name"] = med.botiquin.company.name
         medicines_dict.append(med_data)
     
+    # Group medicines by company or botiquin
+    grouped_data = {}
+    if show_company:
+        for med in medicines_dict:
+            company_name = med.get("company_name", "Unknown Company")
+            grouped_data.setdefault(company_name, []).append(med)
+    else:
+        for med in medicines_dict:
+            botiquin_name = med.get("botiquin_name") or med.get("botiquin", {}).get("name") or "Unknown Botiquin"
+            grouped_data.setdefault(botiquin_name, []).append(med)
+    
     # Build summary statistics
     summary = {
         "total": len(all_medicines),
@@ -245,7 +239,7 @@ def inventory():
     return render_template(
         "inventory.html",
         user=user,
-        medicines=medicines_dict,
+        grouped_data=grouped_data,
         summary=summary,
         current_status=status_filter,
         show_company=show_company

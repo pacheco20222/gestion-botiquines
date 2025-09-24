@@ -118,7 +118,7 @@ Based on transcript meeting with Edgar Canul (boss) and Emilio Rafael Medina Gon
 
 ---
 
-## Claude Memory Notes
+## Claude and ChatGPT Memory Notes
 - Jose is software developer, hardware is separate team
 - Meeting transcript shows visual compartment representation was requested
 - Bootstrap + Flask architecture confirmed in meeting

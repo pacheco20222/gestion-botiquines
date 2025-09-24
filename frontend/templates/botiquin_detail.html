@@ -205,4 +205,75 @@
             <i class="bi bi-x-circle"></i> Vencidos
         </a>
         <a href="/botiquin/{{ botiquin.id }}?status=EXPIRES_SOON" 
-           class="btn btn-outline-warning btn-sm {% if current_status == '
+           class="btn btn-outline-warning btn-sm {% if current_status == 'EXPIRES_SOON' %}active{% endif %}">
+            <i class="bi bi-clock-history"></i> Por Vencer
+        </a>
+        <a href="/botiquin/{{ botiquin.id }}?status=EXPIRES_30" 
+           class="btn btn-outline-secondary btn-sm {% if current_status == 'EXPIRES_30' %}active{% endif %}">
+            <i class="bi bi-calendar3"></i> Vence en 30 días
+        </a>
+        <a href="/botiquin/{{ botiquin.id }}?status=LOW_STOCK" 
+           class="btn btn-outline-warning btn-sm {% if current_status == 'LOW_STOCK' %}active{% endif %}">
+            <i class="bi bi-exclamation-triangle"></i> Bajo Stock
+        </a>
+        <a href="/botiquin/{{ botiquin.id }}?status=OUT_OF_STOCK" 
+           class="btn btn-outline-dark btn-sm {% if current_status == 'OUT_OF_STOCK' %}active{% endif %}">
+            <i class="bi bi-dash-circle"></i> Sin Stock
+        </a>
+        <a href="/botiquin/{{ botiquin.id }}?status=OK" 
+           class="btn btn-outline-success btn-sm {% if current_status == 'OK' %}active{% endif %}">
+            <i class="bi bi-check-circle"></i> OK
+        </a>
+    </div>
+</div>
+
+<!-- Compartments Grid -->
+<div class="compartment-grid d-grid" style="grid-template-columns: repeat({{ grid_cols }}, 1fr); gap: 1rem;">
+    {% for number in range(1, botiquin.total_compartments + 1) %}
+        {% set comp = comp_map.get(number) %}
+        <div>
+            <div class="compartment-cell 
+                {% if comp %}
+                    {% if comp.status == 'EXPIRED' %}compartment-expired{% elif comp.status == 'EXPIRES_SOON' %}compartment-expires-soon{% elif comp.status == 'EXPIRES_30' %}compartment-expires-30{% elif comp.status == 'LOW_STOCK' %}compartment-low-stock{% elif comp.status == 'OUT_OF_STOCK' %}compartment-out-of-stock{% elif comp.status == 'OK' %}compartment-ok{% else %}compartment-empty{% endif %}
+                {% else %}
+                    compartment-empty
+                {% endif %}">
+                <div class="compartment-number">{{ number }}</div>
+                {% if comp and comp.medicine_name %}
+                    <div class="medicine-name">{{ comp.medicine_name }}</div>
+                    <div class="medicine-quantity">
+                        {{ comp.quantity }}
+                    </div>
+                {% else %}
+                    <div class="medicine-name">Vacío</div>
+                {% endif %}
+            </div>
+        </div>
+    {% endfor %}
+</div>
+
+<!-- Legend -->
+<div class="mt-4">
+    <div class="legend-item">
+        <div class="legend-color compartment-expired"></div> Vencido
+    </div>
+    <div class="legend-item">
+        <div class="legend-color compartment-expires-soon"></div> Por Vencer
+    </div>
+    <div class="legend-item">
+        <div class="legend-color compartment-expires-30"></div> Vence en 30 días
+    </div>
+    <div class="legend-item">
+        <div class="legend-color compartment-low-stock"></div> Bajo Stock
+    </div>
+    <div class="legend-item">
+        <div class="legend-color compartment-out-of-stock"></div> Sin Stock
+    </div>
+    <div class="legend-item">
+        <div class="legend-color compartment-ok"></div> OK
+    </div>
+    <div class="legend-item">
+        <div class="legend-color compartment-empty"></div> Vacío
+    </div>
+</div>
+{% endblock %}
