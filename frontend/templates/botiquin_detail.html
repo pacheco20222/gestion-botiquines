@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+
+{% block title %}{{ botiquin.name }} - Detalle{% endblock %}
+
+{% block extra_css %}
+<style>
+.compartment-grid {
+    gap: 10px;
+}
+
+.compartment-cell {
+    aspect-ratio: 1;
+    border: 2px solid #dee2e6;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    position: relative;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    min-height: 120px;
+}
+
+.compartment-cell:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.compartment-empty {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-style: dashed;
+    color: #6c757d;
+}
+
+.compartment-expired {
+    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+    border-color: #dc3545;
+    color: white;
+}
+
+.compartment-expires-soon {
+    background: linear-gradient(135deg, #fd7e14 0%, #e55a00 100%);
+    border-color: #fd7e14;
+    color: white;
+}
+
+.compartment-out-of-stock {
+    background: linear-gradient(135deg, #343a40 0%, #23272b 100%);
+    border-color: #343a40;
+    color: white;
+}
+
+.compartment-low-stock {
+    background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%);
+    border-color: #ffc107;
+    color: #212529;
+}
+
+.compartment-expires-30 {
+    background: linear-gradient(135deg, #6c757d 0%, #545b62 100%);
+    border-color: #6c757d;
+    color: white;
+}
+
+.compartment-ok {
+    background: linear-gradient(135deg, #198754 0%, #157347 100%);
+    border-color: #198754;
+    color: white;
+}
+
+.compartment-number {
+    position: absolute;
+    top: 5px;
+    left: 8px;
+    font-size: 0.75rem;
+    font-weight: bold;
+    opacity: 0.8;
+}
+
+.medicine-name {
+    font-weight: bold;
+    font-size: 0.85rem;
+    line-height: 1.1;
+    margin-bottom: 4px;
+}
+
+.medicine-quantity {
+    font-size: 0.75rem;
+    opacity: 0.9;
+}
+
+.legend-item {
+    display: inline-flex;
+    align-items: center;
+    margin-right: 15px;
+    margin-bottom: 5px;
+}
+
+.legend-color {
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    margin-right: 8px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Header -->
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item">
+                    <a href="/dashboard"><i class="bi bi-house"></i> Dashboard</a>
+                </li>
+                <li class="breadcrumb-item active">{{ botiquin.name }}</li>
+            </ol>
+        </nav>
+        <h2 class="mb-0">
+            <i class="bi bi-box-seam"></i> {{ botiquin.name }}
+            {% if botiquin.company_name %}
+            <span class="badge bg-primary ms-2">{{ botiquin.company_name }}</span>
+            {% endif %}
+        </h2>
+        <p class="text-muted mb-0">
+            <i class="bi bi-geo-alt"></i> {{ botiquin.location or 'Ubicación no especificada' }}
+        </p>
+    </div>
+    <div class="text-end">
+        <div class="btn-group" role="group">
+            <a href="/api/medicines/botiquin/{{ botiquin.id }}" class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-list-ul"></i> Vista Tabla
+            </a>
+            <button class="btn btn-primary btn-sm active">
+                <i class="bi bi-grid-3x3"></i> Vista Compartimentos
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-2 mb-2">
+        <div class="card text-center border-info">
+            <div class="card-body py-2">
+                <div class="fs-5 fw-bold text-info">{{ summary.total }}</div>
+                <small class="text-muted">Total</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2 mb-2">
+        <div class="card text-center border-danger">
+            <div class="card-body py-2">
+                <div class="fs-5 fw-bold text-danger">{{ summary.critical }}</div>
+                <small class="text-muted">Críticos</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2 mb-2">
+        <div class="card text-center border-warning">
+            <div class="card-body py-2">
+                <div class="fs-5 fw-bold text-warning">{{ summary.warning }}</div>
+                <small class="text-muted">Advertencias</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2 mb-2">
+        <div class="card text-center border-success">
+            <div class="card-body py-2">
+                <div class="fs-5 fw-bold text-success">{{ summary.ok }}</div>
+                <small class="text-muted">OK</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2 mb-2">
+        <div class="card text-center border-secondary">
+            <div class="card-body py-2">
+                <div class="fs-5 fw-bold text-secondary">{{ summary.compartments_used }}</div>
+                <small class="text-muted">Ocupados</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2 mb-2">
+        <div class="card text-center border-light">
+            <div class="card-body py-2">
+                <div class="fs-5 fw-bold text-muted">{{ summary.compartments_free }}</div>
+                <small class="text-muted">Libres</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Status Filter Buttons -->
+<div class="mb-3">
+    <div class="btn-group" role="group">
+        <a href="/botiquin/{{ botiquin.id }}" 
+           class="btn btn-outline-secondary btn-sm {% if not current_status %}active{% endif %}">
+            <i class="bi bi-grid"></i> Todos
+        </a>
+        <a href="/botiquin/{{ botiquin.id }}?status=EXPIRED" 
+           class="btn btn-outline-danger btn-sm {% if current_status == 'EXPIRED' %}active{% endif %}">
+            <i class="bi bi-x-circle"></i> Vencidos
+        </a>
+        <a href="/botiquin/{{ botiquin.id }}?status=EXPIRES_SOON" 
+           class="btn btn-outline-warning btn-sm {% if current_status == '
