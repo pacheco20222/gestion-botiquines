@@ -36,7 +36,7 @@ def login():
 
         if not username or not password:
             error_msg = "Username and password are required"
-            if request.json:
+            if request.content_type and 'application/json' in request.content_type:
                 return jsonify({"error": error_msg}), 400
             else:
                 return render_template("login.html", error=error_msg)
@@ -56,7 +56,7 @@ def login():
             session["company_id"] = user.company_id
             
             # Redirect based on request type
-            if request.json:
+            if request.content_type and 'application/json' in request.content_type:
                 return jsonify({
                     "success": True,
                     "user": {
@@ -70,7 +70,7 @@ def login():
                 return redirect(url_for("pages.dashboard"))
         else:
             error_msg = "Invalid credentials"
-            if request.json:
+            if request.content_type and 'application/json' in request.content_type:
                 return jsonify({"error": error_msg}), 401
             else:
                 return render_template("login.html", error=error_msg)
