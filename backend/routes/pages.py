@@ -171,6 +171,50 @@ def botiquin_detail(botiquin_id):
     )
 
 
+@bp.get("/botiquin/<int:botiquin_id>/inventory")
+def botiquin_inventory(botiquin_id):
+    """Inventory view for a specific botiquin"""
+    if "user_id" not in session:
+        return redirect(url_for("users.login"))
+    
+    user = User.query.get(session["user_id"])
+    if not user:
+        return redirect(url_for("users.login"))
+    
+    botiquin = Botiquin.query.get(botiquin_id)
+    if not botiquin:
+        return "Botiquin not found", 404
+    
+    # Check access permissions
+    if not user.is_super_admin() and botiquin.company_id != user.company_id:
+        return "Access denied", 403
+    
+    status_filter = request.args.get("status")
+    
+    medicines = botiquin.medicines
+    if status_filter:
+        medicines = [m for m in medicines if m.status() == status_filter]
+    
+    grouped_data = {botiquin.name: [med.to_dict() for med in medicines]}
+    
+    all_medicines = botiquin.medicines
+    summary = {
+        "total": len(all_medicines),
+        "critical": sum(1 for m in all_medicines if m.status() in ["EXPIRED", "OUT_OF_STOCK"]),
+        "low_stock": sum(1 for m in all_medicines if m.status() == "LOW_STOCK"),
+        "last_update": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    }
+    
+    return render_template(
+        "inventory.html",
+        user=user,
+        grouped_data=grouped_data,
+        summary=summary,
+        current_status=status_filter,
+        show_company=False
+    )
+
+
 @bp.get("/inventory")
 def inventory():
     """

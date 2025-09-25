@@ -78,9 +78,15 @@ Based on transcript meeting with Edgar Canul (boss) and Emilio Rafael Medina Gon
    - **Step 2**: ❌ AUTHENTICATION BUGS FOUND:
      - **Security Issue**: Root URL bypasses login verification
      - **HTTP 415 Error**: Login form sends form data, route expects JSON
-   - **Step 3**: 🔄 FIXING: Authentication and login flow
-6. **🔄 NEXT**: Verify hardware endpoints are working
-7. **🔄 NEXT**: Test different user roles and access control
+   - **Step 3**: 🔄 FIXING: Authentication and login flow (partially done)
+6. **✅ DONE**: Implemented dynamic compartments grid in `botiquin_detail.html`, linked with `comp_map` from backend.
+7. **✅ DONE**: Fixed compartment colors and medicine names displaying correctly.
+8. **✅ DONE**: Updated `inventory.html` to group tables by company (superadmin) or by botiquín (company admin).
+9. **✅ DONE**: Added `/botiquin/<id>/inventory` route in `pages.py` for table view of a single botiquín.
+10. **✅ DONE**: Updated `botiquin_detail.html` to link "Vista Tabla" to new route instead of JSON endpoint.
+11. **🔄 NEXT**: Test new inventory grouping with different roles (superadmin vs company admin).
+12. **🔄 NEXT**: Validate table view per botiquín works with filters and summary.
+13. **🔄 NEXT**: Continue fixing authentication/login flow (root URL redirect, form POST vs JSON).
 
 ---
 
