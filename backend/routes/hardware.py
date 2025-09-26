@@ -22,9 +22,11 @@ def receive_sensor_data():
         "hardware_id": "BOT001",
         "timestamp": "2025-09-23T10:30:00",
         "sensor_type": "weight",
-        "compartment": 1,
-        "weight": 45.5,
-        "unit": "grams"
+        "compartments": [
+            {"compartment": 1, "weight": 45.5, "unit": "grams"},
+            {"compartment": 2, "weight": 30.2, "unit": "grams"},
+            {"compartment": 3, "weight": 0.0, "unit": "grams"}
+        ]
     }
     """
     data = request.get_json()
@@ -41,7 +43,7 @@ def receive_sensor_data():
     
     try:
         # Validate required fields
-        required = ["hardware_id", "compartment", "weight"]
+        required = ["hardware_id", "compartments"]
         missing = [f for f in required if f not in data]
         if missing:
             log_entry.error_message = f"Missing fields: {missing}"
@@ -58,53 +60,70 @@ def receive_sensor_data():
             return jsonify({"error": f"Botiquin not found for hardware_id: {data['hardware_id']}"}), 404
         
         log_entry.botiquin_id = botiquin.id
-        log_entry.compartment_number = data["compartment"]
-        log_entry.weight_reading = data["weight"]
         
-        # Find medicine in the compartment
-        medicine = Medicine.query.filter_by(
-            botiquin_id=botiquin.id,
-            compartment_number=data["compartment"]
-        ).first()
+        results = []
+        errors = []
         
-        if not medicine:
-            log_entry.error_message = f"No medicine found in compartment {data['compartment']}"
-            db.session.add(log_entry)
-            db.session.commit()
-            return jsonify({
-                "warning": f"No medicine assigned to compartment {data['compartment']}",
-                "botiquin": botiquin.name,
-                "compartment": data["compartment"]
-            }), 200
-        
-        # Update medicine weight and calculate new quantity
-        old_quantity = medicine.quantity
-        old_weight = medicine.current_weight
-        
-        # Update from sensor
-        new_quantity = medicine.update_from_sensor(data["weight"])
-        
-        # Update botiquin sync timestamp
-        botiquin.last_sync_at = datetime.utcnow()
-        
-        # Mark log as processed
-        log_entry.processed = True
-        
-        db.session.add(log_entry)
-        db.session.commit()
-        
-        # Prepare response
-        response = {
-            "success": True,
-            "botiquin": {
-                "id": botiquin.id,
-                "name": botiquin.name,
-                "hardware_id": botiquin.hardware_id
-            },
-            "medicine": {
-                "id": medicine.id,
-                "name": medicine.trade_name,
-                "compartment": medicine.compartment_number,
+        # Iterate through compartments
+        for comp in data["compartments"]:
+            compartment_number = comp.get("compartment")
+            weight = comp.get("weight")
+            
+            # Create individual log entries per compartment
+            comp_log = HardwareLog(
+                botiquin_id=botiquin.id,
+                compartment_number=compartment_number,
+                weight_reading=weight,
+                sensor_type=data.get("sensor_type", "unknown"),
+                raw_data=json.dumps(comp),
+                created_at=datetime.utcnow()
+            )
+            
+            if compartment_number is None or weight is None:
+                comp_log.error_message = "Missing compartment or weight data"
+                comp_log.processed = False
+                db.session.add(comp_log)
+                errors.append({
+                    "compartment": compartment_number,
+                    "error": "Missing compartment or weight data"
+                })
+                continue
+            
+            # Find medicine in the compartment
+            medicine = Medicine.query.filter_by(
+                botiquin_id=botiquin.id,
+                compartment_number=compartment_number
+            ).first()
+            
+            if not medicine:
+                comp_log.error_message = f"No medicine found in compartment {compartment_number}"
+                comp_log.processed = False
+                db.session.add(comp_log)
+                errors.append({
+                    "compartment": compartment_number,
+                    "warning": f"No medicine assigned to compartment {compartment_number}"
+                })
+                results.append({
+                    "compartment": compartment_number,
+                    "status": "empty",
+                    "weight": weight
+                })
+                continue
+            
+            # Update medicine weight and calculate new quantity
+            old_quantity = medicine.quantity
+            old_weight = medicine.current_weight
+            
+            # Update from sensor
+            new_quantity = medicine.update_from_sensor(weight)
+            
+            # Mark compartment log as processed
+            comp_log.processed = True
+            db.session.add(comp_log)
+            
+            results.append({
+                "compartment": compartment_number,
+                "medicine": medicine.trade_name,
                 "old_weight": old_weight,
                 "new_weight": medicine.current_weight,
                 "old_quantity": old_quantity,
@@ -112,21 +131,46 @@ def receive_sensor_data():
                 "quantity_change": new_quantity - old_quantity,
                 "status": medicine.status(),
                 "unit_weight": medicine.unit_weight
+            })
+        
+        # Update botiquin sync timestamp
+        botiquin.last_sync_at = datetime.utcnow()
+        
+        # Mark main log as processed
+        log_entry.processed = True
+        
+        db.session.add(log_entry)
+        db.session.commit()
+        
+        # Prepare response
+        response = {
+            "success": len(errors) == 0,
+            "botiquin": {
+                "id": botiquin.id,
+                "name": botiquin.name,
+                "hardware_id": botiquin.hardware_id
             },
+            "results": results,
+            "errors": errors if errors else None,
             "timestamp": datetime.utcnow().isoformat()
         }
         
-        # Add alert if critical status
-        if medicine.status() in ["OUT_OF_STOCK", "EXPIRED"]:
-            response["alert"] = {
-                "type": "critical",
-                "message": f"{medicine.trade_name} is {medicine.status()}"
-            }
-        elif medicine.status() in ["LOW_STOCK", "EXPIRES_SOON"]:
-            response["alert"] = {
-                "type": "warning", 
-                "message": f"{medicine.trade_name} is {medicine.status()}"
-            }
+        # Add alerts if any medicine has critical or warning status
+        alerts = []
+        for res in results:
+            status = res.get("status")
+            if status in ["OUT_OF_STOCK", "EXPIRED"]:
+                alerts.append({
+                    "type": "critical",
+                    "message": f"{res.get('medicine')} is {status}"
+                })
+            elif status in ["LOW_STOCK", "EXPIRES_SOON"]:
+                alerts.append({
+                    "type": "warning", 
+                    "message": f"{res.get('medicine')} is {status}"
+                })
+        if alerts:
+            response["alerts"] = alerts
         
         return jsonify(response), 200
         
@@ -138,107 +182,7 @@ def receive_sensor_data():
         return jsonify({"error": f"Processing error: {str(e)}"}), 500
 
 
-@bp.post("/batch_sensor_data")
-def receive_batch_sensor_data():
-    """
-    Receive multiple sensor readings at once.
-    Useful when hardware sends data for all compartments.
-    
-    Expected JSON format:
-    {
-        "hardware_id": "BOT001",
-        "timestamp": "2025-09-23T10:30:00",
-        "readings": [
-            {"compartment": 1, "weight": 45.5},
-            {"compartment": 2, "weight": 30.2},
-            {"compartment": 3, "weight": 0.0}
-        ]
-    }
-    """
-    data = request.get_json()
-    
-    if not data:
-        return jsonify({"error": "No data provided"}), 400
-    
-    # Validate required fields
-    if "hardware_id" not in data or "readings" not in data:
-        return jsonify({"error": "Missing hardware_id or readings"}), 400
-    
-    # Find botiquin
-    botiquin = Botiquin.query.filter_by(hardware_id=data["hardware_id"]).first()
-    if not botiquin:
-        return jsonify({"error": f"Botiquin not found for hardware_id: {data['hardware_id']}"}), 404
-    
-    results = []
-    errors = []
-    
-    # Process each reading
-    for reading in data.get("readings", []):
-        try:
-            if "compartment" not in reading or "weight" not in reading:
-                errors.append({"compartment": reading.get("compartment"), "error": "Missing data"})
-                continue
-            
-            # Log the reading
-            log_entry = HardwareLog(
-                botiquin_id=botiquin.id,
-                compartment_number=reading["compartment"],
-                weight_reading=reading["weight"],
-                sensor_type="weight",
-                raw_data=json.dumps(reading),
-                created_at=datetime.utcnow()
-            )
-            
-            # Find medicine
-            medicine = Medicine.query.filter_by(
-                botiquin_id=botiquin.id,
-                compartment_number=reading["compartment"]
-            ).first()
-            
-            if not medicine:
-                log_entry.error_message = "No medicine in compartment"
-                log_entry.processed = False
-                db.session.add(log_entry)
-                results.append({
-                    "compartment": reading["compartment"],
-                    "status": "empty",
-                    "weight": reading["weight"]
-                })
-                continue
-            
-            # Update medicine
-            old_quantity = medicine.quantity
-            new_quantity = medicine.update_from_sensor(reading["weight"])
-            
-            log_entry.processed = True
-            db.session.add(log_entry)
-            
-            results.append({
-                "compartment": reading["compartment"],
-                "medicine": medicine.trade_name,
-                "old_quantity": old_quantity,
-                "new_quantity": new_quantity,
-                "status": medicine.status()
-            })
-            
-        except Exception as e:
-            errors.append({
-                "compartment": reading.get("compartment"),
-                "error": str(e)
-            })
-    
-    # Update botiquin sync time
-    botiquin.last_sync_at = datetime.utcnow()
-    db.session.commit()
-    
-    return jsonify({
-        "success": len(errors) == 0,
-        "botiquin": botiquin.name,
-        "processed": len(results),
-        "results": results,
-        "errors": errors if errors else None,
-        "timestamp": datetime.utcnow().isoformat()
-    }), 200
+# Removed /batch_sensor_data endpoint as per instructions
 
 
 @bp.get("/logs")
@@ -297,7 +241,6 @@ def register_hardware():
     Expected JSON:
     {
         "hardware_id": "BOT001",
-        "company_id": 1,
         "name": "Botiquín Principal",
         "location": "Planta Baja",
         "compartments": 12
@@ -309,7 +252,7 @@ def register_hardware():
         return jsonify({"error": "No data provided"}), 400
     
     # Check required fields
-    required = ["hardware_id", "company_id", "name"]
+    required = ["hardware_id", "name"]
     missing = [f for f in required if f not in data]
     if missing:
         return jsonify({"error": f"Missing fields: {missing}"}), 400
@@ -322,37 +265,17 @@ def register_hardware():
             "botiquin": existing.to_dict()
         }), 200
     
-    # Create new botiquin
-    from models.models import Company
-    company = Company.query.get(data["company_id"])
-    if not company:
-        return jsonify({"error": f"Company {data['company_id']} not found"}), 404
+    # company_id is optional
+    company_id = data.get("company_id", None)
     
     compartments = data.get("compartments", 12)
-    rows = data.get("rows", 3)
-    cols = data.get("cols", 4)
-    
-    # Auto-calculate grid if not provided
-    if compartments and not (data.get("rows") and data.get("cols")):
-        if compartments == 12:
-            rows, cols = 3, 4
-        elif compartments == 16:
-            rows, cols = 4, 4
-        elif compartments == 20:
-            rows, cols = 4, 5
-        else:
-            # Default grid
-            cols = 4
-            rows = (compartments + 3) // 4
     
     botiquin = Botiquin(
         hardware_id=data["hardware_id"],
         name=data["name"],
         location=data.get("location", ""),
-        company_id=company.id,
+        company_id=company_id,
         total_compartments=compartments,
-        compartment_rows=rows,
-        compartment_cols=cols,
         active=True,
         last_sync_at=datetime.utcnow()
     )

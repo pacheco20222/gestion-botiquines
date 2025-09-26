@@ -84,31 +84,47 @@ Based on transcript meeting with Edgar Canul (boss) and Emilio Rafael Medina Gon
 8. **✅ DONE**: Updated `inventory.html` to group tables by company (superadmin) or by botiquín (company admin).
 9. **✅ DONE**: Added `/botiquin/<id>/inventory` route in `pages.py` for table view of a single botiquín.
 10. **✅ DONE**: Updated `botiquin_detail.html` to link "Vista Tabla" to new route instead of JSON endpoint.
-11. **🔄 NEXT**: Test new inventory grouping with different roles (superadmin vs company admin).
-12. **🔄 NEXT**: Validate table view per botiquín works with filters and summary.
-13. **🔄 NEXT**: Continue fixing authentication/login flow (root URL redirect, form POST vs JSON).
+11. **✅ DONE**: Refactored hardware.py to handle botiquín-level JSON with compartments array.
+12. **🔄 NEXT**: Test new hardware endpoint with simulated JSON payload.
+13. **🔄 NEXT**: Validate data flow from compartments array into Medicine updates.
+14. **🔄 NEXT**: Document new API format in README.
 
 ---
 
 ## Hardware Integration Notes
 **Wi-Fi Module**: "SCP que tiene un módulo Wi-Fi"  
-**Expected JSON Format**:
+**Expected JSON Format (MVP)**:
 ```json
 {
   "hardware_id": "BOT001",
   "timestamp": "2025-09-23T10:30:00",
-  "sensor_type": "weight",
-  "compartment": 1,
-  "weight": 45.5,
-  "unit": "grams"
+  "compartments": [
+    {
+      "compartment": 1,
+      "weight": 45.5
+    },
+    {
+      "compartment": 2,
+      "weight": 30.0
+    },
+    {
+      "compartment": 3,
+      "weight": 0.0
+    },
+    {
+      "compartment": 4,
+      "weight": 18.2
+    }
+  ]
 }
 ```
+- The MVP will have 4 compartments per botiquín, but the design supports a variable number of compartments.
+- Botiquín assignment to companies is handled manually by the superadmin via the dashboard.
 
-**Hardware Endpoints Ready**:
-- `POST /api/hardware/sensor_data` - Single sensor reading
-- `POST /api/hardware/batch_sensor_data` - Multiple readings
+**Hardware Endpoints**:
+- `POST /api/hardware/sensor_data` - Full botiquín payload with compartments array
 - `POST /api/hardware/test_connection` - Connection test
-- `POST /api/hardware/register_hardware` - Register new botiquin
+- `POST /api/hardware/register_hardware` - Register new botiquín
 
 ---
 

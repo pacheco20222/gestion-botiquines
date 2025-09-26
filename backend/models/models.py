@@ -93,7 +93,8 @@ class User(db.Model):
         
 class Botiquin(db.Model):
     """
-    First Aid Kit (Botiquín) - physical unit with compartments.
+    First Aid Kit (Botiquín) - physical unit.
+    Data is sent as a whole, not by compartments individually.
     Each company can have multiple botiquines.
     """
     __tablename__ = "botiquines"
@@ -105,12 +106,10 @@ class Botiquin(db.Model):
     location = db.Column(db.String(120)) # Physical location description
     
     # Foreign key to company
-    company_id = db.Column(db.Integer, db.ForeignKey("companies.id"), nullable=False)
+    company_id = db.Column(db.Integer, db.ForeignKey("companies.id"), nullable=True)
 
     # Compartment configuration
-    total_compartments = db.Column(db.Integer, default=12, nullable=False)  # Default 12 compartments
-    compartment_rows = db.Column(db.Integer, default=3)  # For visual representation
-    compartment_cols = db.Column(db.Integer, default=4)  # For visual representation
+    total_compartments = db.Column(db.Integer, default=4, nullable=False)  # Default 4 compartments for MVP
     
     active = db.Column(db.Boolean, default=True)
     last_sync_at = db.Column(db.DateTime)  # Last hardware sync
@@ -122,16 +121,8 @@ class Botiquin(db.Model):
     medicines = db.relationship('Medicine', backref='botiquin', lazy=True, cascade='all, delete-orphan')
     
     def get_compartment_status(self):
-        """Returns a map of compartment statuses for visual representation"""
-        compartments = {}
-        for medicine in self.medicines:
-            if medicine.compartment_number:
-                compartments[medicine.compartment_number] = {
-                    "medicine": medicine.trade_name,
-                    "status": medicine.status(),
-                    "quantity": medicine.quantity
-                }
-        return compartments
+        """Deprecated: compartment-level status is not used currently."""
+        return {}
     
     def to_dict(self):
         return {
@@ -142,8 +133,6 @@ class Botiquin(db.Model):
             "company_id": self.company_id,
             "company_name": self.company.name if self.company else None,
             "total_compartments": self.total_compartments,
-            "compartment_rows": self.compartment_rows,
-            "compartment_cols": self.compartment_cols,
             "active": self.active,
             "last_sync_at": self.last_sync_at.isoformat() if self.last_sync_at else None,
             "medicines_count": len(self.medicines),
