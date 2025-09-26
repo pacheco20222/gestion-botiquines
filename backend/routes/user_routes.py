@@ -3,7 +3,8 @@ User authentication and management routes.
 Updated to support super_admin and company_admin roles.
 """
 
-from flask import Blueprint, request, jsonify, session, redirect, url_for, render_template
+from flask import Blueprint, request, jsonify, redirect, url_for, render_template, flash
+from flask_login import login_user, logout_user, current_user, login_required
 from werkzeug.security import check_password_hash, generate_password_hash
 from datetime import datetime
 from db import db
@@ -17,10 +18,8 @@ def login():
     """Handle user login - FIXED to handle both form and JSON data"""
     if request.method == "GET":
         # Check if already logged in
-        if "user_id" in session:
-            user = User.query.get(session["user_id"])
-            if user and user.active:
-                return redirect(url_for("pages.dashboard"))
+        if current_user.is_authenticated and getattr(current_user, "active", False):
+            return redirect(url_for("pages.dashboard"))
         return render_template("login.html")
 
     if request.method == "POST":
@@ -49,11 +48,7 @@ def login():
             user.last_login = datetime.utcnow()
             db.session.commit()
             
-            # Store user info in session
-            session["user_id"] = user.id
-            session["username"] = user.username
-            session["user_type"] = user.user_type
-            session["company_id"] = user.company_id
+            login_user(user)
             
             # Redirect based on request type
             if request.content_type and 'application/json' in request.content_type:
@@ -73,13 +68,16 @@ def login():
             if request.content_type and 'application/json' in request.content_type:
                 return jsonify({"error": error_msg}), 401
             else:
+                flash(error_msg, "danger")
                 return render_template("login.html", error=error_msg)
 
 
 @bp.route("/logout")
 def logout():
     """Handle user logout"""
-    session.clear()
+    if current_user.is_authenticated:
+        logout_user()
+        flash("Sesión cerrada correctamente", "success")
     return redirect(url_for("users.login"))
 
 
@@ -89,13 +87,12 @@ def list_users():
     List users. 
     Super admin sees all users, company admin sees only their company users.
     """
-    if "user_id" not in session:
+    if not current_user.is_authenticated:
         return jsonify({"error": "Not authenticated"}), 401
-    
-    current_user = User.query.get(session["user_id"])
-    if not current_user:
+
+    if not getattr(current_user, "active", False):
         return jsonify({"error": "User not found"}), 404
-    
+
     if current_user.is_super_admin():
         # Super admin sees all
         users = User.query.all()
@@ -112,11 +109,10 @@ def create_user():
     Create a new user.
     Only super_admin can create users.
     """
-    if "user_id" not in session:
+    if not current_user.is_authenticated:
         return jsonify({"error": "Not authenticated"}), 401
-    
-    current_user = User.query.get(session["user_id"])
-    if not current_user or not current_user.is_super_admin():
+
+    if not current_user.is_super_admin():
         return jsonify({"error": "Only super admin can create users"}), 403
     
     data = request.get_json() or {}
@@ -163,11 +159,10 @@ def create_user():
 @bp.route("/api/users/<int:user_id>", methods=["GET"])
 def get_user(user_id):
     """Get user details"""
-    if "user_id" not in session:
+    if not current_user.is_authenticated:
         return jsonify({"error": "Not authenticated"}), 401
     
-    current_user = User.query.get(session["user_id"])
-    if not current_user:
+    if not getattr(current_user, "active", False):
         return jsonify({"error": "Current user not found"}), 404
     
     user = User.query.get(user_id)
@@ -188,11 +183,10 @@ def update_user(user_id):
     Update user.
     Super admin can update anyone, company admin can only update their company users.
     """
-    if "user_id" not in session:
+    if not current_user.is_authenticated:
         return jsonify({"error": "Not authenticated"}), 401
     
-    current_user = User.query.get(session["user_id"])
-    if not current_user:
+    if not getattr(current_user, "active", False):
         return jsonify({"error": "Current user not found"}), 404
     
     user = User.query.get(user_id)
@@ -244,11 +238,10 @@ def delete_user(user_id):
     Delete (deactivate) user.
     Only super_admin can delete users.
     """
-    if "user_id" not in session:
+    if not current_user.is_authenticated:
         return jsonify({"error": "Not authenticated"}), 401
-    
-    current_user = User.query.get(session["user_id"])
-    if not current_user or not current_user.is_super_admin():
+
+    if not current_user.is_super_admin():
         return jsonify({"error": "Only super admin can delete users"}), 403
     
     user = User.query.get(user_id)
@@ -269,24 +262,23 @@ def delete_user(user_id):
 @bp.route("/api/profile", methods=["GET"])
 def get_profile():
     """Get current user profile"""
-    if "user_id" not in session:
+    if not current_user.is_authenticated:
         return jsonify({"error": "Not authenticated"}), 401
-    
-    user = User.query.get(session["user_id"])
-    if not user:
+
+    if not getattr(current_user, "active", False):
         return jsonify({"error": "User not found"}), 404
-    
-    return jsonify(user.to_dict()), 200
+
+    return jsonify(current_user.to_dict()), 200
 
 
 @bp.route("/api/profile/password", methods=["PUT"])
 def change_password():
     """Change current user's password"""
-    if "user_id" not in session:
+    if not current_user.is_authenticated:
         return jsonify({"error": "Not authenticated"}), 401
     
-    user = User.query.get(session["user_id"])
-    if not user:
+    user = current_user
+    if not getattr(user, "active", False):
         return jsonify({"error": "User not found"}), 404
     
     data = request.get_json() or {}
@@ -309,14 +301,10 @@ def change_password():
 @bp.route("/api/auth/check", methods=["GET"])
 def check_auth():
     """Check if user is authenticated and return session info"""
-    if "user_id" not in session:
+    if not current_user.is_authenticated or not getattr(current_user, "active", False):
         return jsonify({"authenticated": False}), 200
-    
-    user = User.query.get(session["user_id"])
-    if not user or not user.active:
-        session.clear()
-        return jsonify({"authenticated": False}), 200
-    
+
+    user = current_user
     return jsonify({
         "authenticated": True,
         "user": {

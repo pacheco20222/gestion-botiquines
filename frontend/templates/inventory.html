@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Inventario de Medicamentos{% endblock %}
+{% block title %}Inventario de Botiquines{% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
@@ -10,60 +10,59 @@
                 <li class="breadcrumb-item">
                     <a href="/dashboard"><i class="bi bi-house"></i> Dashboard</a>
                 </li>
-                <li class="breadcrumb-item active">Inventario de Medicamentos</li>
+                <li class="breadcrumb-item active">Inventario de Botiquines</li>
             </ol>
         </nav>
         <h2 class="mb-0">
-            <i class="bi bi-capsule"></i> Inventario de Medicamentos
+            <i class="bi bi-hospital"></i> Inventario de Botiquines
         </h2>
+        <p class="text-muted mb-0">Última sincronización registrada: {{ summary.last_update }}</p>
     </div>
 </div>
 
-<!-- Summary Cards -->
 <div class="row mb-4">
   <div class="col-md-3 mb-3">
     <div class="card text-center border-info">
       <div class="card-body">
-        <i class="bi bi-capsule fs-1 text-info"></i>
-        <h5 class="card-title">Total Medicamentos</h5>
-        <p class="card-text fs-4 fw-bold text-info">{{ summary.total }}</p>
+        <i class="bi bi-hospital fs-1 text-info"></i>
+        <h5 class="card-title">Total Botiquines</h5>
+        <p class="card-text fs-4 fw-bold text-info">{{ summary.total_botiquines }}</p>
       </div>
     </div>
   </div>
   <div class="col-md-3 mb-3">
     <div class="card text-center border-danger">
       <div class="card-body">
-        <i class="bi bi-exclamation-triangle fs-1 text-danger"></i>
+        <i class="bi bi-exclamation-octagon fs-1 text-danger"></i>
         <h5 class="card-title">Alertas Críticas</h5>
-        <p class="card-text fs-4 fw-bold text-danger">{{ summary.critical }}</p>
+        <p class="card-text fs-4 fw-bold text-danger">{{ summary.critical_alerts }}</p>
       </div>
     </div>
   </div>
   <div class="col-md-3 mb-3">
     <div class="card text-center border-warning">
       <div class="card-body">
-        <i class="bi bi-exclamation-circle fs-1 text-warning"></i>
-        <h5 class="card-title">Stock Bajo</h5>
-        <p class="card-text fs-4 fw-bold text-warning">{{ summary.low_stock }}</p>
+        <i class="bi bi-exclamation-triangle fs-1 text-warning"></i>
+        <h5 class="card-title">Alertas Preventivas</h5>
+        <p class="card-text fs-4 fw-bold text-warning">{{ summary.warning_alerts }}</p>
       </div>
     </div>
   </div>
   <div class="col-md-3 mb-3">
     <div class="card text-center border-secondary">
       <div class="card-body">
-        <i class="bi bi-clock fs-1 text-muted"></i>
-        <h5 class="card-title">Última Actualización</h5>
-        <p class="card-text fs-6 text-muted">{{ summary.last_update }}</p>
+        <i class="bi bi-capsule-pill fs-1 text-muted"></i>
+        <h5 class="card-title">Medicinas Totales</h5>
+        <p class="card-text fs-4 text-muted">{{ summary.total_medicines }}</p>
       </div>
     </div>
   </div>
 </div>
 
-<!-- Filter Buttons -->
 <div class="card mb-4">
     <div class="card-header">
         <h6 class="mb-0">
-            <i class="bi bi-funnel"></i> Filtros por Estado
+            <i class="bi bi-funnel"></i> Filtros por Estado (según medicinas del botiquín)
         </h6>
     </div>
     <div class="card-body py-2">
@@ -100,163 +99,148 @@
     </div>
 </div>
 
-<!-- Medicines Tables Grouped -->
-{% set total_medicines = 0 %}
-{% for group_name, meds in grouped_data.items() %}
-    {% set total_medicines = total_medicines + meds|length %}
+{% for group_name, data in grouped_data.items() %}
     <div class="card mb-4">
         <div class="card-header d-flex justify-content-between align-items-center">
-            <h5 class="mb-0">
-                <i class="bi bi-table"></i> 
-                {{ group_name }}
+            <div>
+                <h5 class="mb-0">
+                    <i class="bi bi-table"></i> {{ data.bot.name }}
+                    {% if show_company %}
+                        <span class="badge bg-primary ms-2">{{ data.bot.company_name or 'Sin asignar' }}</span>
+                    {% endif %}
+                </h5>
+                <small class="text-muted">
+                    {{ data.bot.location or 'Ubicación no especificada' }} · Última sync: {{ data.bot.last_sync }}
+                </small>
                 {% if current_status %}
-                <span class="badge bg-primary ms-2">Filtro: {{ current_status }}</span>
+                    <div><span class="badge bg-primary mt-1">Filtro aplicado: {{ current_status }}</span></div>
                 {% endif %}
-            </h5>
-            <small class="text-muted">{{ meds|length }} medicamentos mostrados</small>
+            </div>
+            <div class="text-end">
+                <a class="btn btn-sm btn-outline-primary" href="/botiquin/{{ data.bot.id }}">
+                    <i class="bi bi-eye"></i> Ver botiquín
+                </a>
+            </div>
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table class="table table-striped table-hover align-middle mb-0">
                     <thead class="table-dark">
                         <tr>
-                            <th>Botiquín</th>
-                            <th>Compartimento</th>
+                            <th class="text-center">Compartimento</th>
                             <th>Medicamento</th>
                             <th>Marca</th>
                             <th>Concentración</th>
-                            <th>Fecha Vencimiento</th>
-                            <th>Inventario</th>
-                            <th>Peso</th>
-                            <th>Último Escaneo</th>
+                            <th>Peso promedio</th>
+                            <th>Peso actual</th>
+                            <th>Cantidad</th>
+                            <th>Reorden</th>
+                            <th>Fecha vencimiento</th>
+                            <th>Último escaneo</th>
                             <th>Estado</th>
                             <th>Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% for med in meds %}
+                        {% for row in data.rows %}
                         <tr>
-                            <!-- Botiquin Info -->
-                            <td>
-                                <div>
-                                    <strong>{{ med["botiquin_name"] }}</strong>
-                                    {% if show_company and med.get("company_name") %}
-                                    <br><small class="text-muted">{{ med["company_name"] }}</small>
-                                    {% endif %}
-                                </div>
-                            </td>
-                            
-                            <!-- Compartment -->
                             <td class="text-center">
-                                {% if med["compartment_number"] %}
-                                <span class="badge bg-secondary"># {{ med["compartment_number"] }}</span>
+                                <span class="badge bg-secondary"># {{ row.compartment }}</span>
+                            </td>
+                            <td>
+                                {% if row.has_medicine %}
+                                <div>
+                                    <strong>{{ row.trade_name }}</strong>
+                                    <br><small class="text-muted">{{ row.generic_name }}</small>
+                                </div>
                                 {% else %}
-                                <span class="text-muted">No asignado</span>
+                                <span class="text-muted">Compartimento vacío</span>
                                 {% endif %}
                             </td>
-                            
-                            <!-- Medicine Info -->
+                            <td>{{ row.brand or 'N/A' }}</td>
+                            <td>{{ row.strength or 'N/A' }}</td>
                             <td>
-                                <div>
-                                    <strong>{{ med["trade_name"] }}</strong>
-                                    <br><small class="text-muted">{{ med["generic_name"] }}</small>
-                                </div>
+                                {% if row.average_weight is not none %}
+                                    {{ '%.2f'|format(row.average_weight) }} g
+                                {% else %}
+                                    <span class="text-muted">N/A</span>
+                                {% endif %}
                             </td>
-                            
-                            <td>{{ med["brand"] or "N/A" }}</td>
-                            <td>{{ med["strength"] or "N/A" }}</td>
-                            
-                            <!-- Expiry Date -->
                             <td>
-                                {% if med["expiry_date"] %}
-                                    {{ med["expiry_date"] }}
-                                    {% if med["days_to_expiry"] is not none %}
-                                        {% if med["days_to_expiry"] < 0 %}
-                                        <br><small class="text-danger">Vencido hace {{ -med["days_to_expiry"] }} días</small>
-                                        {% elif med["days_to_expiry"] <= 30 %}
-                                        <br><small class="text-warning">{{ med["days_to_expiry"] }} días restantes</small>
+                                {% if row.current_weight is not none %}
+                                    {{ '%.2f'|format(row.current_weight) }} g
+                                {% else %}
+                                    <span class="text-muted">N/A</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if row.has_medicine %}
+                                    <strong>{{ row.quantity }}</strong>
+                                    {% if row.max_capacity %}
+                                        <br><small class="text-muted">Cap. {{ row.max_capacity }}</small>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="text-muted">0</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if row.reorder_level is not none %}
+                                    {{ row.reorder_level }}
+                                {% else %}
+                                    <span class="text-muted">N/A</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if row.expiry_date %}
+                                    {{ row.expiry_date }}
+                                    {% if row.days_to_expiry is not none %}
+                                        {% if row.days_to_expiry < 0 %}
+                                            <br><small class="text-danger">Vencido hace {{ -row.days_to_expiry }} días</small>
+                                        {% elif row.days_to_expiry <= 30 %}
+                                            <br><small class="text-warning">{{ row.days_to_expiry }} días restantes</small>
                                         {% endif %}
                                     {% endif %}
                                 {% else %}
-                                <span class="text-muted">No especificada</span>
+                                    <span class="text-muted">No especificada</span>
                                 {% endif %}
                             </td>
-                            
-                            <!-- Quantity Progress Bar -->
-                            <td style="min-width: 120px;">
-                                <div class="d-flex align-items-center">
-                                    <div class="progress flex-grow-1 me-2" style="height: 20px;">
-                                        {% set percent = (med["quantity"] / med["reorder_level"] * 100) if med["reorder_level"] > 0 else 0 %}
-                                        <div class="progress-bar 
-                                                    {% if percent <= 0 %}bg-dark
-                                                    {% elif percent < 50 %}bg-warning text-dark
-                                                    {% elif percent < 100 %}bg-info
-                                                    {% else %}bg-success{% endif %}"
-                                             role="progressbar"
-                                             style="width: {{ [percent, 100]|min }}%;"
-                                             aria-valuenow="{{ percent|round(0) }}" 
-                                             aria-valuemin="0" 
-                                             aria-valuemax="100">
-                                            {{ med["quantity"] }}
-                                        </div>
-                                    </div>
-                                    <small class="text-muted">/ {{ med["reorder_level"] }}</small>
-                                </div>
-                            </td>
-                            
-                            <!-- Weight Info -->
                             <td>
-                                {% if med["current_weight"] %}
-                                <div>
-                                    <strong>{{ med["current_weight"] }}g</strong>
-                                    {% if med["unit_weight"] %}
-                                    <br><small class="text-muted">{{ med["unit_weight"] }}g/unidad</small>
-                                    {% endif %}
-                                </div>
+                                {% if row.last_scan %}
+                                    <small>{{ row.last_scan }}</small>
                                 {% else %}
-                                <span class="text-muted">N/A</span>
+                                    <small class="text-muted">Nunca</small>
                                 {% endif %}
                             </td>
-                            
-                            <!-- Last Scan -->
-                            <td>
-                                {% if med["last_scan_at"] %}
-                                <small>{{ med["last_scan_at"][:16] }}</small>
-                                {% else %}
-                                <small class="text-muted">Nunca</small>
-                                {% endif %}
-                            </td>
-                            
-                            <!-- Status Badge -->
                             <td>
                                 {% set status_map = {
-                                    "OUT_OF_STOCK": {"class": "dark", "icon": "box", "text": "Sin Stock"},
+                                    "OUT_OF_STOCK": {"class": "dark", "icon": "box", "text": "Sin stock"},
                                     "EXPIRED": {"class": "danger", "icon": "x-circle", "text": "Vencido"},
-                                    "EXPIRES_SOON": {"class": "warning", "icon": "clock", "text": "Por Vencer"},
-                                    "EXPIRES_30": {"class": "secondary", "icon": "calendar", "text": "Vence ≤30 días"},
-                                    "LOW_STOCK": {"class": "warning", "icon": "exclamation-triangle", "text": "Stock Bajo"},
-                                    "OK": {"class": "success", "icon": "check-circle", "text": "OK"}
+                                    "EXPIRES_SOON": {"class": "warning", "icon": "clock-history", "text": "Por vencer"},
+                                    "EXPIRES_30": {"class": "secondary", "icon": "calendar3", "text": "Vence ≤30 días"},
+                                    "LOW_STOCK": {"class": "warning", "icon": "exclamation-triangle", "text": "Stock bajo"},
+                                    "OK": {"class": "success", "icon": "check-circle", "text": "OK"},
+                                    "EMPTY": {"class": "light text-dark", "icon": "square", "text": "Vacío"}
                                 } %}
-                                {% set status_info = status_map.get(med["status"], {"class": "secondary", "icon": "question", "text": med["status"]}) %}
+                                {% set status_info = status_map.get(row.status, {"class": "secondary", "icon": "question", "text": row.status}) %}
                                 <span class="badge bg-{{ status_info.class }}">
                                     <i class="bi bi-{{ status_info.icon }}"></i> {{ status_info.text }}
                                 </span>
                             </td>
-                            
-                            <!-- Actions -->
                             <td>
                                 <div class="btn-group btn-group-sm" role="group">
-                                    <button class="btn btn-outline-primary btn-sm" 
-                                            data-bs-toggle="tooltip" 
-                                            title="Ver en botiquín"
-                                            onclick="window.location.href='/botiquin/{{ med["botiquin_id"] }}'">
+                                    <a class="btn btn-outline-primary" href="/botiquin/{{ row.bot_id }}" data-bs-toggle="tooltip" title="Ver botiquín">
                                         <i class="bi bi-eye"></i>
-                                    </button>
-                                    <button class="btn btn-outline-secondary btn-sm" 
-                                            data-bs-toggle="tooltip" 
-                                            title="Editar medicamento">
-                                        <i class="bi bi-pencil"></i>
-                                    </button>
+                                    </a>
+                                    {% if row.has_medicine %}
+                                    <a class="btn btn-outline-secondary" href="/api/botiquines/{{ row.bot_id }}" data-bs-toggle="tooltip" title="Datos API">
+                                        <i class="bi bi-diagram-3"></i>
+                                    </a>
+                                    {% endif %}
+                            {% if current_user.is_super_admin() and not row.company_name %}
+                                    <a class="btn btn-outline-success" href="/botiquin/{{ row.bot_id }}/assign" data-bs-toggle="tooltip" title="Asignar botiquín">
+                                        <i class="bi bi-building"></i>
+                                    </a>
+                                    {% endif %}
                                 </div>
                             </td>
                         </tr>
@@ -268,21 +252,21 @@
     </div>
 {% endfor %}
 
-{% if total_medicines == 0 %}
+{% if display_count == 0 %}
 <div class="text-center py-5">
-    <i class="bi bi-capsule text-muted" style="font-size: 4rem;"></i>
+    <i class="bi bi-hospital text-muted" style="font-size: 4rem;"></i>
     <h4 class="text-muted mt-3">
         {% if current_status %}
-        No se encontraron medicamentos con estado "{{ current_status }}"
+        No se encontraron botiquines con el filtro "{{ current_status }}"
         {% else %}
-        No hay medicamentos registrados
+        No hay botiquines registrados para tu usuario.
         {% endif %}
     </h4>
     <p class="text-muted">
         {% if current_status %}
-        Prueba con un filtro diferente o revisa los botiquines.
+        Prueba con un filtro diferente o revisa los estados de tus botiquines.
         {% else %}
-        Los medicamentos aparecerán aquí una vez que se registren en los botiquines.
+        Los botiquines aparecerán aquí una vez que se asignen o registren en el sistema.
         {% endif %}
     </p>
     <a href="/dashboard" class="btn btn-primary">
@@ -294,7 +278,6 @@
 
 {% block extra_js %}
 <script>
-// Initialize tooltips
 var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
 var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
     return new bootstrap.Tooltip(tooltipTriggerEl);

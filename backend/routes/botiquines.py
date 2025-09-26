@@ -32,7 +32,10 @@ def validate_botiquin_payload(data, partial=False):
         if field in data and data[field] is not None:
             try:
                 v = int(data[field])
-                if v <= 0:
+                if field == "total_compartments":
+                    if v < 4:
+                        errors.append("'total_compartments' must be at least 4")
+                elif v <= 0:
                     errors.append(f"'{field}' must be > 0")
             except (TypeError, ValueError):
                 errors.append(f"'{field}' must be an integer")
@@ -83,9 +86,9 @@ def create_botiquin():
         name=data.get("name"),
         location=data.get("location"),
         company_id=int(data.get("company_id")),
-        total_compartments=int(data.get("total_compartments", 12)),
-        compartment_rows=int(data.get("compartment_rows", 3)),
-        compartment_cols=int(data.get("compartment_cols", 4)),
+        total_compartments=int(data.get("total_compartments", 4)),
+        compartment_rows=int(data.get("compartment_rows", 2)),
+        compartment_cols=int(data.get("compartment_cols", 2)),
         active=data.get("active", True)
     )
     

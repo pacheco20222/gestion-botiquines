@@ -3,7 +3,8 @@ Frontend page routes with botiquin support.
 Handles dashboard views for multiple first aid kits.
 """
 
-from flask import Blueprint, render_template, request, redirect, url_for, session, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, jsonify, flash
+from flask_login import current_user, login_required, logout_user
 from models.models import Medicine, Botiquin, Company, User
 from datetime import datetime
 from db import db
@@ -20,35 +21,27 @@ FIXES for Authentication Issues:
 @bp.route("/")
 def index():
     """Redirect to login or dashboard based on session - FIXED SECURITY"""
-    if "user_id" in session:
-        # Verify the user still exists and is active
-        user = User.query.get(session["user_id"])
-        if user and user.active:
+    if current_user.is_authenticated:
+        if current_user.active:
             return redirect(url_for("pages.dashboard"))
-        else:
-            # Clear invalid session
-            session.clear()
-    
-    # Always redirect to login if no valid session
+        logout_user()
+
     return redirect(url_for("users.login"))
 
 
 @bp.get("/dashboard")
+@login_required
 def dashboard():
     """
     Main dashboard showing all botiquines for the user's company.
     Super admin sees all botiquines from all companies.
     """
-    # Check if user is logged in
-    if "user_id" not in session:
+    user = current_user
+    if not user.active:
+        logout_user()
+        flash("Tu cuenta está inactiva", "danger")
         return redirect(url_for("users.login"))
-    
-    # Get user and determine access level
-    user = User.query.get(session["user_id"])
-    if not user:
-        session.clear()
-        return redirect(url_for("users.login"))
-    
+
     # Get botiquines based on user type
     if user.is_super_admin():
         # Super admin sees all
@@ -63,7 +56,7 @@ def dashboard():
             company_id=user.company_id, 
             active=True
         ).all()
-        companies = [user.company]
+        companies = [user.company] if user.company else []
         show_company = False
     
     # Collect statistics
@@ -81,15 +74,17 @@ def dashboard():
         critical_count += bot_critical
         warning_count += bot_warning
         
+        company_name = bot.company.name if bot.company else None
+
         botiquines_data.append({
             "id": bot.id,
             "name": bot.name,
             "location": bot.location,
-            "company": bot.company.name if show_company else None,
+            "company_name": company_name,
+            "is_assigned": company_name is not None,
             "medicines_count": len(medicines),
             "critical": bot_critical,
             "warning": bot_warning,
-            "compartments_used": sum(1 for m in medicines if m.compartment_number),
             "compartments_total": bot.total_compartments,
             "last_sync": bot.last_sync_at.strftime("%Y-%m-%d %H:%M:%S") if bot.last_sync_at else "Never"
         })
@@ -104,7 +99,6 @@ def dashboard():
     
     return render_template(
         "dashboard.html",
-        user=user,
         summary=summary,
         botiquines=botiquines_data,
         show_company=show_company
@@ -112,13 +106,13 @@ def dashboard():
 
 
 @bp.get("/botiquin/<int:botiquin_id>")
+@login_required
 def botiquin_detail(botiquin_id):
     """Detailed view of a specific botiquin with compartment visualization"""
-    if "user_id" not in session:
-        return redirect(url_for("users.login"))
-    
-    user = User.query.get(session["user_id"])
-    if not user:
+    user = current_user
+    if not user.active:
+        logout_user()
+        flash("Tu cuenta está inactiva", "danger")
         return redirect(url_for("users.login"))
     
     botiquin = Botiquin.query.get(botiquin_id)
@@ -155,14 +149,12 @@ def botiquin_detail(botiquin_id):
         "critical": sum(1 for m in all_medicines if m.status() in ["EXPIRED", "OUT_OF_STOCK"]),
         "warning": sum(1 for m in all_medicines if m.status() in ["EXPIRES_SOON", "LOW_STOCK"]),
         "ok": sum(1 for m in all_medicines if m.status() == "OK"),
-        "compartments_used": sum(1 for m in all_medicines if m.compartment_number),
-        "compartments_free": botiquin.total_compartments - sum(1 for m in all_medicines if m.compartment_number),
+        "total_compartments": botiquin.total_compartments,
         "last_sync": botiquin.last_sync_at.strftime("%Y-%m-%d %H:%M:%S") if botiquin.last_sync_at else "Never"
     }
     
     return render_template(
         "botiquin_detail.html",
-        user=user,
         botiquin=botiquin,
         summary=summary,
         current_status=status_filter,
@@ -172,13 +164,13 @@ def botiquin_detail(botiquin_id):
 
 
 @bp.get("/botiquin/<int:botiquin_id>/inventory")
+@login_required
 def botiquin_inventory(botiquin_id):
     """Inventory view for a specific botiquin"""
-    if "user_id" not in session:
-        return redirect(url_for("users.login"))
-    
-    user = User.query.get(session["user_id"])
-    if not user:
+    user = current_user
+    if not user.active:
+        logout_user()
+        flash("Tu cuenta está inactiva", "danger")
         return redirect(url_for("users.login"))
     
     botiquin = Botiquin.query.get(botiquin_id)
@@ -207,7 +199,6 @@ def botiquin_inventory(botiquin_id):
     
     return render_template(
         "inventory.html",
-        user=user,
         grouped_data=grouped_data,
         summary=summary,
         current_status=status_filter,
@@ -216,88 +207,136 @@ def botiquin_inventory(botiquin_id):
 
 
 @bp.get("/inventory")
+@login_required
 def inventory():
-    """
-    NEW: Proper inventory view showing all medicines across botiquines
-    Compatible with updated inventory.html template
-    """
-    if "user_id" not in session:
+    """Inventory view that lists botiquines accessible to the current user."""
+    user = current_user
+    if not user.active:
+        logout_user()
+        flash("Tu cuenta está inactiva", "danger")
         return redirect(url_for("users.login"))
-    
-    user = User.query.get(session["user_id"])
-    if not user:
-        return redirect(url_for("users.login"))
-    
-    # Get filter parameters
+
     status_filter = request.args.get("status")
-    
-    # Get medicines based on user access level
+
+    # Determine scope based on role
     if user.is_super_admin():
-        # Super admin sees all medicines from all companies
-        medicines_query = Medicine.query.join(Botiquin).join(Company)
+        botiquines = Botiquin.query.filter_by(active=True).all()
         show_company = True
     else:
-        # Company admin sees only their company's medicines
         if not user.company_id:
             return "User not assigned to any company", 403
-        medicines_query = Medicine.query.join(Botiquin).filter(
-            Botiquin.company_id == user.company_id
-        )
+        botiquines = Botiquin.query.filter_by(company_id=user.company_id, active=True).all()
         show_company = False
-    
-    # Apply status filter if provided
-    all_medicines = medicines_query.all()
-    if status_filter:
-        medicines = [m for m in all_medicines if m.status() == status_filter]
-    else:
-        medicines = all_medicines
-    
-    # Convert to dict format for template
-    medicines_dict = []
-    for med in medicines:
-        med_data = med.to_dict()
-        # Add company info if super admin
-        if show_company:
-            med_data["company_name"] = med.botiquin.company.name
-        medicines_dict.append(med_data)
-    
-    # Group medicines by company or botiquin
+
     grouped_data = {}
-    if show_company:
-        for med in medicines_dict:
-            company_name = med.get("company_name", "Unknown Company")
-            grouped_data.setdefault(company_name, []).append(med)
-    else:
-        for med in medicines_dict:
-            botiquin_name = med.get("botiquin_name") or med.get("botiquin", {}).get("name") or "Unknown Botiquin"
-            grouped_data.setdefault(botiquin_name, []).append(med)
-    
-    # Build summary statistics
+
+    total_medicines = 0
+    total_critical = 0
+    total_warning = 0
+    latest_sync = None
+    display_count = 0
+
+    for bot in botiquines:
+        medicines = bot.medicines
+        med_total = len(medicines)
+
+        total_medicines += med_total
+        total_critical += sum(1 for m in medicines if m.status() in ["EXPIRED", "OUT_OF_STOCK"])
+        total_warning += sum(1 for m in medicines if m.status() in ["EXPIRES_SOON", "EXPIRES_30", "LOW_STOCK"])
+
+        if bot.last_sync_at and (latest_sync is None or bot.last_sync_at > latest_sync):
+            latest_sync = bot.last_sync_at
+
+        section_key = bot.name
+        if show_company:
+            company_label = bot.company.name if bot.company else "Sin asignar"
+            section_key = f"{bot.name} · {company_label}"
+
+        rows = []
+        for compartment_number in range(1, bot.total_compartments + 1):
+            med = next((m for m in medicines if m.compartment_number == compartment_number), None)
+
+            if med is None and status_filter:
+                continue
+
+            status = med.status() if med else "EMPTY"
+            if status_filter:
+                if med is None:
+                    continue
+                if status_filter == "OK":
+                    if status != "OK":
+                        continue
+                elif status != status_filter:
+                    continue
+
+            row = {
+                "bot_id": bot.id,
+                "bot_name": bot.name,
+                "company_name": bot.company.name if bot.company else None,
+                "location": bot.location,
+                "compartment": compartment_number,
+                "has_medicine": med is not None,
+                "trade_name": med.trade_name if med else None,
+                "generic_name": med.generic_name if med else None,
+                "brand": med.brand if med else None,
+                "strength": med.strength if med else None,
+                "average_weight": med.unit_weight if med else None,
+                "current_weight": med.current_weight if med else None,
+                "quantity": med.quantity if med else 0,
+                "reorder_level": med.reorder_level if med else None,
+                "max_capacity": med.max_capacity if med else None,
+                "expiry_date": med.expiry_date.isoformat() if med and med.expiry_date else None,
+                "days_to_expiry": med.days_to_expiry() if med else None,
+                "status": status,
+                "last_scan": med.last_scan_at.strftime("%Y-%m-%d %H:%M:%S") if med and med.last_scan_at else None,
+            }
+
+            rows.append(row)
+            display_count += 1
+
+        if not rows:
+            continue
+
+        grouped_data[section_key] = {
+            "bot": {
+                "id": bot.id,
+                "name": bot.name,
+                "company_name": bot.company.name if bot.company else None,
+                "location": bot.location,
+                "last_sync": bot.last_sync_at.strftime("%Y-%m-%d %H:%M:%S") if bot.last_sync_at else "Never",
+            },
+            "rows": rows
+        }
+
     summary = {
-        "total": len(all_medicines),
-        "critical": sum(1 for m in all_medicines if m.status() in ["EXPIRED", "OUT_OF_STOCK"]),
-        "low_stock": sum(1 for m in all_medicines if m.status() == "LOW_STOCK"),
-        "last_update": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        "total_botiquines": len(botiquines),
+        "total_medicines": total_medicines,
+        "critical_alerts": total_critical,
+        "warning_alerts": total_warning,
+        "last_update": latest_sync.strftime("%Y-%m-%d %H:%M:%S") if latest_sync else "Nunca"
     }
-    
+
     return render_template(
         "inventory.html",
-        user=user,
         grouped_data=grouped_data,
         summary=summary,
         current_status=status_filter,
-        show_company=show_company
+        show_company=show_company,
+        display_count=display_count
     )
 
 
 @bp.get("/companies")
+@login_required
 def companies():
     """Company management view (super admin only)"""
-    if "user_id" not in session:
+    user = current_user
+    if not user.active:
+        logout_user()
+        flash("Tu cuenta está inactiva", "danger")
         return redirect(url_for("users.login"))
-    
-    user = User.query.get(session["user_id"])
-    if not user or not user.is_super_admin():
+
+    if not user.is_super_admin():
         return "Access denied", 403
     
     companies = Company.query.all()
@@ -318,8 +357,58 @@ def companies():
     # NOTE: companies.html template not created yet - will show basic info for now
     return render_template(
         "dashboard.html",  # Use dashboard as fallback until companies.html is created
-        user=user,
         summary={"total_companies": len(companies)},
         companies=companies_data,
         show_company=True
     )
+
+@bp.get("/botiquines/assign")
+@login_required
+def assign_botiquines():
+    """View to list unassigned botiquines for super admins to assign"""
+    user = current_user
+    if not user.active:
+        logout_user()
+        flash("Tu cuenta está inactiva", "danger")
+        return redirect(url_for("users.login"))
+
+    if not user.is_super_admin():
+        return "Access denied", 403
+    
+    unassigned_botiquines = Botiquin.query.filter_by(company_id=None).all()
+    return render_template("assign_botiquines.html", unassigned=unassigned_botiquines)
+
+@bp.route("/botiquin/<int:botiquin_id>/assign", methods=["GET", "POST"])
+@login_required
+def assign_single_botiquin(botiquin_id):
+    """Assign a single botiquin to a company (super admin only)"""
+    user = current_user
+    if not user.active:
+        logout_user()
+        flash("Tu cuenta está inactiva", "danger")
+        return redirect(url_for("users.login"))
+
+    if not user.is_super_admin():
+        return "Access denied", 403
+    
+    botiquin = Botiquin.query.get(botiquin_id)
+    if not botiquin or not botiquin.active:
+        return "Botiquin not found or inactive", 404
+    
+    if request.method == "GET":
+        companies = Company.query.filter_by(active=True).all()
+        return render_template("assign_single.html", botiquin=botiquin, companies=companies)
+    
+    # POST
+    company_id = request.form.get("company_id")
+    if not company_id:
+        return "Company ID is required", 400
+    
+    company = Company.query.get(company_id)
+    if not company or not company.active:
+        return "Invalid company selected", 400
+    
+    botiquin.company_id = company.id
+    db.session.commit()
+    flash("Botiquín asignado correctamente", "success")
+    return redirect(url_for("pages.dashboard"))

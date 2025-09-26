@@ -35,19 +35,24 @@
     <div>
         <h1 class="h3 mb-1">Panel general</h1>
         <p class="text-muted mb-0">
-            {% if user.is_super_admin() %}
+            {% if current_user.is_super_admin() %}
                 Supervisando todas las empresas conectadas.
-            {% elif user.company %}
-                Resumen del botiquín para {{ user.company.name }}.
+            {% elif current_user.company %}
+                Resumen del botiquín para {{ current_user.company.name }}.
             {% else %}
                 Resumen de tus botiquines.
             {% endif %}
         </p>
     </div>
-    <div class="text-end">
+    <div class="text-end d-flex gap-2">
         <a class="btn btn-sm btn-outline-primary" href="/inventory">
             <i class="bi bi-list-ul"></i> Ver inventario completo
         </a>
+        {% if current_user.is_super_admin() %}
+        <a class="btn btn-sm btn-outline-success" href="/botiquines/assign">
+            <i class="bi bi-plus-circle"></i> Asignar botiquines
+        </a>
+        {% endif %}
     </div>
 </div>
 
@@ -109,15 +114,15 @@
                             {{ bot.location or 'Ubicación no especificada' }}
                         </p>
                     </div>
-                    {% if show_company and bot.company %}
-                    <span class="badge bg-primary">{{ bot.company }}</span>
+                    {% if show_company %}
+                    <span class="badge bg-primary">{{ bot.company_name or 'Sin asignar' }}</span>
                     {% endif %}
                 </div>
 
                 <div class="botiquin-meta text-muted mb-3">
                     <div><strong>Total medicinas:</strong> {{ bot.medicines_count }}</div>
                     <div><strong>Críticos:</strong> {{ bot.critical }} · <strong>Alertas:</strong> {{ bot.warning }}</div>
-                    <div><strong>Compartimentos:</strong> {{ bot.compartments_used }}/{{ bot.compartments_total }}</div>
+                    <div><strong>Compartimentos:</strong> {{ bot.compartments_total }}</div>
                     <div><strong>Última sincronización:</strong> {{ bot.last_sync }}</div>
                 </div>
 
@@ -128,6 +133,11 @@
                     <a class="btn btn-sm btn-outline-secondary" href="/api/botiquines/{{ bot.id }}">
                         <i class="bi bi-diagram-3"></i> Datos API
                     </a>
+                    {% if current_user.is_super_admin() and not bot.is_assigned %}
+                    <a class="btn btn-sm btn-outline-success" href="/botiquin/{{ bot.id }}/assign">
+                        <i class="bi bi-building"></i> Asignar
+                    </a>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -136,7 +146,7 @@
     <div class="col-12">
         <div class="alert alert-info d-flex align-items-center" role="alert">
             <i class="bi bi-info-circle me-2"></i>
-            {% if user.is_super_admin() %}
+            {% if current_user.is_super_admin() %}
                 No hay botiquines registrados actualmente.
             {% else %}
                 No hay botiquines activos asociados a tu empresa.

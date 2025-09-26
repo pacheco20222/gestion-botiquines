@@ -9,6 +9,23 @@ import json
 from db import db
 from models.models import Botiquin, Medicine, HardwareLog
 
+# Expected payload example for sensor updates (MVP assumes 4 compartments minimum):
+# {
+#     "hardware_id": "BOT001",
+#     "timestamp": "2025-09-23T10:30:00",
+#     "unit_payload": {
+#         "average_weight": 0.5  # optional shared value if all medicines use same average (unit) weight (grams)
+#     },
+#     "compartments": [
+#         {
+#             "compartment": 1,
+#             "weight": 45.5,
+#             "average_weight": 0.5  # optional override per compartment
+#         },
+#         ...
+#     ]
+# }
+
 bp = Blueprint("hardware", __name__)
 
 
@@ -63,11 +80,24 @@ def receive_sensor_data():
         
         results = []
         errors = []
+
+        payload_section = data.get("unit_payload", {})
+        payload_avg_weight = payload_section.get("average_weight", payload_section.get("unit_weight"))
+        if payload_avg_weight is not None:
+            try:
+                payload_avg_weight = float(payload_avg_weight)
+                if payload_avg_weight <= 0:
+                    errors.append({"warning": "Payload average_weight must be greater than zero"})
+                    payload_avg_weight = None
+            except (TypeError, ValueError):
+                errors.append({"warning": "Payload average_weight is not a valid number"})
+                payload_avg_weight = None
         
         # Iterate through compartments
         for comp in data["compartments"]:
             compartment_number = comp.get("compartment")
             weight = comp.get("weight")
+            avg_weight_override = comp.get("average_weight", comp.get("unit_weight"))
             
             # Create individual log entries per compartment
             comp_log = HardwareLog(
@@ -110,11 +140,29 @@ def receive_sensor_data():
                 })
                 continue
             
-            # Update medicine weight and calculate new quantity
+            # Determine unit weight to use for this update
+            avg_weight_to_apply = None
+            if avg_weight_override is not None:
+                try:
+                    avg_weight_to_apply = float(avg_weight_override)
+                except (TypeError, ValueError):
+                    avg_weight_to_apply = None
+                    errors.append({
+                        "compartment": compartment_number,
+                        "warning": f"Invalid average_weight override provided ({avg_weight_override})"
+                    })
+
+            if avg_weight_to_apply is None and payload_avg_weight is not None:
+                avg_weight_to_apply = payload_avg_weight
+
+            # Update medicine weight and unit weight if provided
+            if avg_weight_to_apply is not None and avg_weight_to_apply > 0:
+                medicine.unit_weight = avg_weight_to_apply
+
             old_quantity = medicine.quantity
             old_weight = medicine.current_weight
-            
-            # Update from sensor
+
+            # Update from sensor (uses internal logic to update quantity based on current unit_weight)
             new_quantity = medicine.update_from_sensor(weight)
             
             # Mark compartment log as processed
@@ -130,7 +178,7 @@ def receive_sensor_data():
                 "new_quantity": new_quantity,
                 "quantity_change": new_quantity - old_quantity,
                 "status": medicine.status(),
-                "unit_weight": medicine.unit_weight
+                "average_weight": medicine.unit_weight
             })
         
         # Update botiquin sync timestamp
@@ -243,7 +291,7 @@ def register_hardware():
         "hardware_id": "BOT001",
         "name": "Botiquín Principal",
         "location": "Planta Baja",
-        "compartments": 12
+        "compartments": 4
     }
     """
     data = request.get_json()
@@ -268,8 +316,15 @@ def register_hardware():
     # company_id is optional
     company_id = data.get("company_id", None)
     
-    compartments = data.get("compartments", 12)
-    
+    compartments = data.get("compartments", 4)
+    try:
+        compartments = int(compartments)
+    except (TypeError, ValueError):
+        return jsonify({"error": "'compartments' must be an integer"}), 400
+
+    if compartments < 4:
+        return jsonify({"error": "Hardware must report at least 4 compartments"}), 400
+
     botiquin = Botiquin(
         hardware_id=data["hardware_id"],
         name=data["name"],

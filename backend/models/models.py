@@ -11,6 +11,7 @@ Updated structure includes:
 from datetime import datetime, date
 from db import db
 from werkzeug.security import generate_password_hash, check_password_hash
+from flask_login import UserMixin
 
 class Company(db.Model):
     """
@@ -43,7 +44,7 @@ class Company(db.Model):
             "updated_at": self.updated_at.isoformat() if self.updated_at else None
         }
 
-class User(db.Model):
+class User(db.Model, UserMixin):
     """
     System users - administrators for companies.
     Two levels: super_admin (manages all) and company_admin (manages their company).
@@ -66,6 +67,10 @@ class User(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
+    @property
+    def is_active(self) -> bool:  # Flask-Login compatibility
+        return bool(self.active)
+
     def set_password(self, password: str):
         """Hash and store a plain password"""
         self.password_hash = generate_password_hash(password)
@@ -161,8 +166,8 @@ class Medicine(db.Model):
     brand = db.Column(db.String(120))                         # Brand or lab
     strength = db.Column(db.String(80))                       # Presentation/strength
     
-    # Weight management for automatic quantity calculation
-    unit_weight = db.Column(db.Float, nullable=True)  # Weight per unit in grams
+    # Weight management for automatic quantity calculation (peso promedio por unidad)
+    unit_weight = db.Column(db.Float, nullable=True)
     current_weight = db.Column(db.Float, nullable=True)  # Total weight from sensor
     
     # Quantity and stock management
@@ -198,6 +203,14 @@ class Medicine(db.Model):
         self.calculate_quantity_from_weight()
         self.last_scan_at = datetime.utcnow()
         return self.quantity
+
+    @property
+    def average_weight(self):
+        return self.unit_weight
+
+    @average_weight.setter
+    def average_weight(self, value):
+        self.unit_weight = value
 
     # --- Helper methods ---
 
@@ -264,7 +277,7 @@ class Medicine(db.Model):
             "generic_name": self.generic_name,
             "brand": self.brand,
             "strength": self.strength,
-            "unit_weight": self.unit_weight,
+        "average_weight": self.unit_weight,
             "current_weight": self.current_weight,
             "quantity": self.quantity,
             "reorder_level": self.reorder_level,

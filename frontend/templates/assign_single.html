@@ -1,0 +1,18 @@
+
+
+{% extends "base.html" %}
+
+{% block content %}
+  <h1>Asignar Botiquín</h1>
+  <p><strong>Nombre:</strong> {{ botiquin.name }}</p>
+  <p><strong>Ubicación:</strong> {{ botiquin.location }}</p>
+  <form method="POST" class="d-flex flex-column gap-3" novalidate>
+    <label for="company" class="form-label">Empresa:</label>
+    <select name="company_id" id="company" class="form-select" required>
+      {% for company in companies %}
+        <option value="{{ company.id }}">{{ company.name }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="btn btn-success">Asignar</button>
+  </form>
+{% endblock %}

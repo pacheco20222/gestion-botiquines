@@ -3,7 +3,8 @@ Routes for Company management.
 Essential for SaaS model - manages multiple companies with their botiquines.
 """
 
-from flask import Blueprint, request, jsonify, session
+from flask import Blueprint, request, jsonify
+from flask_login import current_user
 from datetime import datetime
 from db import db
 from models.models import Company, User, Botiquin, Medicine
@@ -13,14 +14,13 @@ bp = Blueprint("companies", __name__)
 
 def check_super_admin():
     """Helper to verify if current user is super admin"""
-    if "user_id" not in session:
+    if not current_user.is_authenticated or not getattr(current_user, "active", False):
         return None
     
-    user = User.query.get(session["user_id"])
-    if not user or not user.is_super_admin():
+    if not current_user.is_super_admin():
         return None
     
-    return user
+    return current_user
 
 
 @bp.route("/")
@@ -29,13 +29,13 @@ def list_companies():
     List all companies.
     Super admin sees all, company admin sees only their company.
     """
-    if "user_id" not in session:
+    if not current_user.is_authenticated:
         return jsonify({"error": "Not authenticated"}), 401
-    
-    user = User.query.get(session["user_id"])
-    if not user:
+
+    user = current_user
+    if not getattr(user, "active", False):
         return jsonify({"error": "User not found"}), 404
-    
+
     if user.is_super_admin():
         # Super admin sees all companies
         companies = Company.query.all()
@@ -88,11 +88,11 @@ def get_company(company_id):
     Get company details.
     Users can only see their own company unless they're super admin.
     """
-    if "user_id" not in session:
+    if not current_user.is_authenticated:
         return jsonify({"error": "Not authenticated"}), 401
-    
-    user = User.query.get(session["user_id"])
-    if not user:
+
+    user = current_user
+    if not getattr(user, "active", False):
         return jsonify({"error": "User not found"}), 404
     
     company = Company.query.get(company_id)
@@ -181,11 +181,11 @@ def get_company_stats(company_id):
     """
     Get detailed statistics for a company.
     """
-    if "user_id" not in session:
+    if not current_user.is_authenticated:
         return jsonify({"error": "Not authenticated"}), 401
-    
-    user = User.query.get(session["user_id"])
-    if not user:
+
+    user = current_user
+    if not getattr(user, "active", False):
         return jsonify({"error": "User not found"}), 404
     
     company = Company.query.get(company_id)
@@ -264,11 +264,11 @@ def get_company_botiquines(company_id):
     """
     Get all botiquines for a company.
     """
-    if "user_id" not in session:
+    if not current_user.is_authenticated:
         return jsonify({"error": "Not authenticated"}), 401
-    
-    user = User.query.get(session["user_id"])
-    if not user:
+
+    user = current_user
+    if not getattr(user, "active", False):
         return jsonify({"error": "User not found"}), 404
     
     # Check permissions
@@ -284,11 +284,11 @@ def get_company_users(company_id):
     """
     Get all users for a company.
     """
-    if "user_id" not in session:
+    if not current_user.is_authenticated:
         return jsonify({"error": "Not authenticated"}), 401
-    
-    user = User.query.get(session["user_id"])
-    if not user:
+
+    user = current_user
+    if not getattr(user, "active", False):
         return jsonify({"error": "User not found"}), 404
     
     # Check permissions
@@ -304,11 +304,11 @@ def get_company_alerts(company_id):
     """
     Get all active alerts for a company's botiquines.
     """
-    if "user_id" not in session:
+    if not current_user.is_authenticated:
         return jsonify({"error": "Not authenticated"}), 401
-    
-    user = User.query.get(session["user_id"])
-    if not user:
+
+    user = current_user
+    if not getattr(user, "active", False):
         return jsonify({"error": "User not found"}), 404
     
     # Check permissions

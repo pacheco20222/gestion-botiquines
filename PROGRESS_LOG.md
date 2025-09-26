@@ -1,5 +1,4 @@
 # PROGRESS LOG - Smart First Aid Kit Management System
-
 **Project:** Gestión de Botiquines Inteligentes  
 **Developer:** Jose Pacheco  
 **Started:** September 2025  
@@ -85,9 +84,8 @@ Based on transcript meeting with Edgar Canul (boss) and Emilio Rafael Medina Gon
 9. **✅ DONE**: Added `/botiquin/<id>/inventory` route in `pages.py` for table view of a single botiquín.
 10. **✅ DONE**: Updated `botiquin_detail.html` to link "Vista Tabla" to new route instead of JSON endpoint.
 11. **✅ DONE**: Refactored hardware.py to handle botiquín-level JSON with compartments array.
-12. **🔄 NEXT**: Test new hardware endpoint with simulated JSON payload.
-13. **🔄 NEXT**: Validate data flow from compartments array into Medicine updates.
-14. **🔄 NEXT**: Document new API format in README.
+12. **✅ DONE**: Test new hardware endpoint with simulated JSON payload.
+13. 🔄 NEXT: Refresh frontend to simplify — remove compartment grid visual representation and focus on table-based views (Dashboard + Botiquines).
 
 ---
 
@@ -147,3 +145,8 @@ Based on transcript meeting with Edgar Canul (boss) and Emilio Rafael Medina Gon
 - React consideration mentioned for complex UI components
 - MVP focus: functionality first, visual polish later
 - Docker containerization confirmed for deployment
+
+
+---
+
+## ✅ Tested `/api/hardware/sensor_data` endpoint with simulated JSON payload — system updated medicines and generated alerts correctly.

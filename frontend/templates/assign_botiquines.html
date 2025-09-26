@@ -1,0 +1,33 @@
+
+
+{% extends 'base.html' %}
+
+{% block content %}
+  <h1>Asignar Botiquines</h1>
+  {% if unassigned %}
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Nombre</th>
+          <th>Ubicación</th>
+          <th>Acción</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for botiquin in unassigned %}
+        <tr>
+          <td>{{ botiquin.name }}</td>
+          <td>{{ botiquin.location or 'Ubicación no especificada' }}</td>
+          <td>
+            <a class="btn btn-primary" href="/botiquin/{{ botiquin.id }}/assign">Asignar</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <div class="alert alert-info" role="alert">
+      No hay botiquines sin asignar
+    </div>
+  {% endif %}
+{% endblock %}

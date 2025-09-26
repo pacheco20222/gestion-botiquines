@@ -56,14 +56,22 @@ def validate_payload(data, *, partial=False):
                 errors.append(f"'{num_field}' must be an integer")
     
     # Validate float fields
-    for float_field in ["unit_weight", "current_weight"]:
-        if float_field in data and data[float_field] is not None:
-            try:
-                v = float(data[float_field])
-                if v < 0:
-                    errors.append(f"'{float_field}' must be >= 0")
-            except (TypeError, ValueError):
-                errors.append(f"'{float_field}' must be a number")
+    weight_key = "average_weight" if "average_weight" in data else ("unit_weight" if "unit_weight" in data else None)
+    if weight_key and data[weight_key] is not None:
+        try:
+            unit_w = float(data[weight_key])
+            if unit_w <= 0:
+                errors.append("'average_weight' must be greater than 0")
+        except (TypeError, ValueError):
+            errors.append("'average_weight' must be a number")
+
+    if "current_weight" in data and data["current_weight"] is not None:
+        try:
+            curr_w = float(data["current_weight"])
+            if curr_w < 0:
+                errors.append("'current_weight' must be >= 0")
+        except (TypeError, ValueError):
+            errors.append("'current_weight' must be a number")
     
     # Validate expiry date
     if "expiry_date" in data and data.get("expiry_date"):
@@ -168,6 +176,8 @@ def create_medicine():
     if not ok:
         return jsonify({"errors": errors}), 400
 
+    weight_value = data.get("average_weight", data.get("unit_weight"))
+
     med = Medicine(
         botiquin_id=int(data.get("botiquin_id")),
         compartment_number=int(data.get("compartment_number")) if data.get("compartment_number") else None,
@@ -175,7 +185,7 @@ def create_medicine():
         generic_name=data.get("generic_name"),
         brand=data.get("brand"),
         strength=data.get("strength"),
-        unit_weight=float(data.get("unit_weight")) if data.get("unit_weight") else None,
+        unit_weight=float(weight_value) if weight_value else None,
         current_weight=float(data.get("current_weight")) if data.get("current_weight") else None,
         quantity=int(data.get("quantity")),
         reorder_level=int(data.get("reorder_level")),
@@ -216,7 +226,7 @@ def update_medicine(med_id):
     # List of fields that can be updated
     fields = [
         "botiquin_id", "compartment_number", "trade_name", "generic_name", 
-        "brand", "strength", "unit_weight", "current_weight", "quantity", 
+        "brand", "strength", "average_weight", "unit_weight", "current_weight", "quantity", 
         "reorder_level", "max_capacity", "expiry_date", "batch_number", "last_scan_at"
     ]
     
@@ -226,8 +236,12 @@ def update_medicine(med_id):
                 setattr(med, f, parse_date(data[f]))
             elif f in ["quantity", "reorder_level", "compartment_number", "max_capacity", "botiquin_id"]:
                 setattr(med, f, int(data[f]) if data[f] is not None else None)
-            elif f in ["unit_weight", "current_weight"]:
-                setattr(med, f, float(data[f]) if data[f] is not None else None)
+            elif f in ["average_weight", "unit_weight", "current_weight"]:
+                value = float(data[f]) if data[f] is not None else None
+                if f in ["average_weight", "unit_weight"]:
+                    med.unit_weight = value
+                else:
+                    med.current_weight = value
             elif f == "last_scan_at":
                 val = data[f]
                 if val is True:
@@ -241,7 +255,7 @@ def update_medicine(med_id):
                 setattr(med, f, data[f])
     
     # Recalculate quantity if weights changed
-    if "unit_weight" in data or "current_weight" in data:
+    if any(k in data for k in ["average_weight", "unit_weight", "current_weight"]):
         if med.unit_weight and med.current_weight:
             med.calculate_quantity_from_weight()
 

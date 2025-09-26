@@ -47,54 +47,24 @@
             <ul class="navbar-nav me-auto">
                 <li class="nav-item">
                     <a class="nav-link {% if request.endpoint == 'pages.dashboard' %}active{% endif %}" href="/dashboard">
-                        <i class="bi bi-speedometer2"></i> Dashboard
+                        Dashboard
                     </a>
                 </li>
-                
-                <!-- Dropdown for Botiquines -->
-                <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
-                        <i class="bi bi-box-seam"></i> Botiquines
-                    </a>
-                    <ul class="dropdown-menu">
-                        <li><a class="dropdown-item" href="/dashboard">Ver Todos</a></li>
-                        <li><a class="dropdown-item" href="/api/medicines/alerts">Alertas Activas</a></li>
-                        <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item" href="/api/botiquines/new">Nuevo Botiquín</a></li>
-                    </ul>
-                </li>
-                
-                <!-- Admin Menu (only for super_admin) -->
-                {% if session.user_type == 'super_admin' %}
-                <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
-                        <i class="bi bi-gear"></i> Administración
-                    </a>
-                    <ul class="dropdown-menu">
-                        <li><a class="dropdown-item" href="/companies">Empresas</a></li>
-                        <li><a class="dropdown-item" href="/api/users">Usuarios</a></li>
-                        <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item" href="/api/hardware/logs">Logs Hardware</a></li>
-                    </ul>
-                </li>
-                {% endif %}
-                
-                <!-- Reports -->
                 <li class="nav-item">
-                    <a class="nav-link" href="/reports">
-                        <i class="bi bi-file-earmark-bar-graph"></i> Reportes
+                    <a class="nav-link {% if request.endpoint == 'pages.inventory' %}active{% endif %}" href="/inventory">
+                        Botiquines
                     </a>
                 </li>
             </ul>
             
             <!-- User Menu -->
             <ul class="navbar-nav">
-                {% if session.user_id %}
+                {% if current_user.is_authenticated %}
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
                         <i class="bi bi-person-circle"></i> 
-                        {{ session.username or 'Usuario' }}
-                        {% if session.user_type == 'super_admin' %}
+                        {{ current_user.username or 'Usuario' }}
+                        {% if current_user.is_super_admin() %}
                         <span class="badge bg-danger ms-1">SA</span>
                         {% endif %}
                     </a>
